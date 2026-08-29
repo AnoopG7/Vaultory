@@ -629,9 +629,9 @@ Each BRD acceptance criterion (AC-1…AC-14) is verified by one or more **test c
 | TBD-1 | Backend: **Node.js** vs **Python** | SRS sign-off | SA (Anoop) + Tech Lead |
 | TBD-2 | Component & charting libraries (MUI/shadcn; Recharts/Chart.js) | SRS sign-off | SA/Tech Lead |
 | TBD-3 | Exact masked-field list confirmed by client | SRS sign-off | Client |
-| TBD-4 | AI auto-qty mode default (target-based vs forecast-based) | Sprint 1 | SA |
+| TBD-4 | AI auto-qty mode default (target-based vs forecast-based) | Sprint 3 | SA |
 | TBD-5 | Perishable (FR-EXP) inclusion in v1.0 (Could) | Sprint planning | SM/PM |
-| TBD-6 | Alert email provider/limit on free tier | Sprint 2 | Tech Lead |
+| TBD-6 | Alert email provider/limit on free tier | Sprint 3 | Tech Lead |
 
 ---
 

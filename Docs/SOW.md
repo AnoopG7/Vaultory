@@ -4,12 +4,12 @@
 
 | **Document ID** | SOW-VAULTORY-001 |
 |---|---|
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Draft for Approval & Sign-off |
 | **Prepared By** | Laxman Patel (Project Manager) — Vaultory |
 | **Date** | 29/08/2026 |
 | **Client / Sponsor** | Small Business Retailer (Prof) |
-| **Base Documents** | BRD v3.3 · SRS v1.0 |
+| **Base Documents** | BRD v3.3 · SRS v1.0 · Sprint Planner v2.0 |
 
 ---
 
@@ -18,6 +18,7 @@
 | Version | Date | Author | Description of Change |
 |---|---|---|---|
 | 1.0 | 29/08/2026 | Laxman Patel (PM) | Initial SOW |
+| 1.1 | 29/08/2026 | Laxman Patel (PM) | Compressed timeline to 3 sprints (29 Aug – 30 Sep 2026) per Sprint Planner v2.0 |
 
 ---
 
@@ -109,32 +110,29 @@ The delivery team will:
 
 | # | Deliverable | Format | Due |
 |---|---|---|---|
-| D-1 | BRD (Business Requirements Document) | MD + PDF | Sprint 1 (Baseline) |
-| D-2 | SRS (Software Requirements Specification) | MD + PDF | Sprint 2 |
-| D-3 | SOW (Statement of Work) | MD + PDF | Sprint 2 |
-| D-4 | Sprint Planner / Backlog (Jira-ready) | MD + Jira | Sprint 2 |
-| D-5 | Working web application | Code + live URLs | Sprint 6 |
-| D-6 | Database schema & seed data | SQL / DDL script | Sprint 3 |
-| D-7 | User Guide | MD / PDF | Sprint 6 |
-| D-8 | UAT report & signed acceptance | MD / PDF | Sprint 6 |
+| D-1 | BRD (Business Requirements Document) | MD + PDF | Sprint 1 |
+| D-2 | SRS (Software Requirements Specification) | MD + PDF | Sprint 1 |
+| D-3 | SOW (Statement of Work) | MD + PDF | Sprint 1 |
+| D-4 | Sprint Planner / Backlog (Jira-ready) | MD + Jira | Sprint 1 |
+| D-5 | Working web application | Code + live URLs | Sprint 3 (30 Sep) |
+| D-6 | Database schema & seed data | SQL / DDL script | Sprint 2 |
+| D-7 | User Guide | MD / PDF | Sprint 3 |
+| D-8 | UAT report & signed acceptance | MD / PDF | Sprint 3 |
 | D-9 | Source code repository + deployment instructions & access | Git + doc | Handover |
 
 ---
 
 ## 4. Project Phases & Timeline
 
-> Agile Scrum, **6 sprints** of **1 week** each (28 working-day equivalent). Aligned with the Sprint Planner. Timeline starts at BRD sign-off.
+> Agile Scrum, **3 sprints** of ~1.5 weeks each, running **29 Aug → 30 Sep 2026** (submission deadline). Aligned with the Sprint Planner v2.0. Timeline starts at BRD sign-off.
 
-| Phase | Sprint(s) | Duration | Key Deliverables / Exit Criteria |
+| Phase | Sprint(s) | Dates | Key Deliverables / Exit Criteria |
 |---|---|---|---|
-| **Initiation & Planning** | Sprint 1 | Week 1 | BRD baseline sign-off; project setup; environment setup (Vercel/Render/DB); backlog created |
-| **Design & Spec** | Sprint 2 | Week 2 | SRS + SOW + Sprint Planner sign-off; DB schema; API design; UI mockups |
-| **Core Build — Inventory & Sales** | Sprint 3 | Week 3 | Products, locations, stock-in/out/transfer/adjust, sales recording, daily/qtr/yr reports, RBAC base |
-| **Procurement & Safety Stock** | Sprint 4 | Week 4 | Safety stock config, alerts, suppliers, manual POs, PO lifecycle |
-| **AI & Monitoring** | Sprint 5 | Week 5 | AI auto-ordering, AI warehouse recommendations, dashboards, executive monitoring, value-add modules |
-| **Test, UAT & Handover** | Sprint 6 | Week 6 | QA/UAT, bug fixes, user guide, demo, acceptance, handover (code + access) |
+| **Foundation, Planning & Design** | Sprint 1 | 29 Aug – 8 Sep | BRD+SRS+SOW+Plan sign-off; project & environment setup (Vercel/Render/DB); DB schema; API design; UI mockups; auth foundation & core models |
+| **Core Build — Inventory, Sales & Procurement** | Sprint 2 | 9 Sep – 19 Sep | Products, stock-in/out/transfer/adjust, sales recording, daily/qtr/yr reports, RBAC, safety stock + alerts, suppliers, manual POs, PO lifecycle |
+| **AI, Monitoring, Test & Handover** | Sprint 3 | 20 Sep – 30 Sep | AI auto-ordering + warehouse recommendations, dashboards, value-adds, QA/UAT, bug fixes, user guide, demo, acceptance, handover (code + access) |
 
-**Delivery end-date:** end of Sprint 6 (subject to timely sign-offs — see §6).
+**Delivery end-date:** **30 Sep 2026** (submission deadline) — subject to timely sign-offs (see §6).
 
 ---
 
@@ -187,7 +185,7 @@ The Client agrees to:
 
 ## 9. Project Control, Communication & Reporting
 
-- **Cadence:** weekly sprint reviews + daily standup (or agreed equivalent).
+- **Cadence:** sprint reviews at the end of each sprint + daily standup (or agreed equivalent).
 - **Communication channels:** email / project chat; a shared Jira board tracks all work.
 - **Reports to client (weekly):** sprint progress, completed scope, open risks, next steps.
 - **Escalation:** SM (Devdarshan S) resolves impediments; PM (Laxman Patel) owns client communication.
@@ -228,7 +226,7 @@ The Client agrees to:
 
 ## 12. Constraints & Assumptions
 
-1. **Timeline:** 6 weekly sprints (fixed), starts at BRD sign-off.
+1. **Timeline:** 3 sprints (fixed), 29 Aug – 30 Sep 2026, starts at BRD sign-off.
 2. **Technology:** React (frontend); Node.js or Python (backend); PostgreSQL; Vercel + Render free tier.
 3. **Team:** 5 members as defined in §5.
 4. **Scope:** strictly BRD §8 / SRS §4.
@@ -294,4 +292,4 @@ By signing, the Client acknowledges and agrees to the scope, deliverables, timel
 
 ---
 
-*End of SOW — Version 1.0 · Project: Vaultory · Team: Vaultory*
+*End of SOW — Version 1.1 · Project: Vaultory · Team: Vaultory*
