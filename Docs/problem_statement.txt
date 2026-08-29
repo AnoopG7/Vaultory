@@ -1,0 +1,26 @@
+# Business Analyst
+
+**Date: 22/08/2026**
+
+## Product:
+
+**Product 5: Small Business Inventory and Sales App**
+
+## Problem Statement:
+
+We want to develop a simple product for small retailers to manage their inventory and sales. The product should help business owners understand what they have in stock and what is selling.
+
+## Sir said / told:
+
+* The client had **3 stores in the city**.
+* Client has a problem in understanding **how much he has stored in his inventory**.
+* At times, the client has observed that **the demand and supply are not in sync**.
+* Client also has a problem understanding **what he is selling and how much he is selling every day, every quarter and every year**.
+* The product should have a feature to allow **store staff to manage inventory** and also **order products from suppliers if the inventory level goes down**.
+* The product should help the client **maintain and track ideal safety stock level**.
+* It should also help the client's **sales people monitor and track sales performance in different stores**.
+* The product should have an **automated ordering feature** to order from the client's supplier whenever **safety stock is down**, using AI.
+* The **AI engine** should suggest to the client **what level of inventory is required in his warehouses**.
+* The backend data should be stored in a **database** and the application should be managed on **GCP**.
+* Product information in the database should be **masked**.
+* The product should give a **monitoring system** that helps to monitor **inventory and sales performance to all senior stakeholders**.
