@@ -4,11 +4,11 @@
 
 | **Document ID** | SPI-PLAN-VAULTORY-001 |
 |---|---|
-| **Version** | 2.0 |
+| **Version** | 2.1 |
 | **Status** | Ready for Jira creation |
 | **Prepared By** | Devdarshan S (Scrum Master) — Vaultory |
 | **Date** | 29/08/2026 |
-| **Base Documents** | BRD v3.3 · SRS v1.0 · SOW v1.0 |
+| **Base Documents** | BRD v3.4 · SRS v1.1 · SOW v1.2 |
 | **Jira Tool** | Jira Software (Scrum board mode) |
 
 ---
@@ -19,6 +19,7 @@
 |---|---|---|---|
 | 1.0 | 29/08/2026 | Devdarshan S (SM) | Initial sprint plan & backlog (6 × 1-week sprints) |
 | 2.0 | 29/08/2026 | Devdarshan S (SM) | Compressed to **3 sprints** to meet Sept 30 submission; consolidated original S1+S2 → Sprint 1, S3+S4 → Sprint 2, S5+S6 → Sprint 3 |
+| 2.1 | 29/08/2026 | Devdarshan S (SM) | Updated Sprint 1 stories for locked stack (React+Tailwind+shadcn/ui, Node.js backend, Supabase Postgres/Auth/Storage, Groq AI) per BRD v3.4 |
 
 ---
 
@@ -125,12 +126,12 @@ This document is the **single planning source** for creating the Vaultory Jira b
 | ID | Type | Item | Pri | Pts | Owner | Req ID |
 |---|---|---|---|---|---|---|
 | VAU-001 | Task | Set up monorepo (frontend/backend), git, branch strategy, linting | Must | 3 | Tech Lead | — |
-| VAU-002 | Task | Scaffold React (TS) app + Tailwind + routing | Must | 3 | Tech Lead | — |
-| VAU-003 | Task | Scaffold backend (Node or Python) + health endpoint | Must | 3 | Tech Lead | — |
-| VAU-004 | Task | Provision PostgreSQL (free tier) + connect backend | Must | 3 | SA | — |
-| VAU-005 | Task | Deploy skeleton to Vercel + Render (free tier, live) | Must | 3 | SA | BRD §8.5 |
+| VAU-002 | Task | Scaffold React (TS) app + Tailwind + shadcn/ui + routing | Must | 3 | Tech Lead | — |
+| VAU-003 | Task | Scaffold Node.js backend (Express/NestJS) + health endpoint | Must | 3 | Tech Lead | — |
+| VAU-004 | Task | Provision Supabase (PostgreSQL/Auth/Storage) + connect backend | Must | 3 | SA | — |
+| VAU-005 | Task | Deploy skeleton to Vercel + Render (+ Supabase/Groq config, live) | Must | 3 | SA | BRD §8.5 |
 | VAU-006 | Task | CI on push (build + lint) | Should | 3 | Tech Lead | — |
-| VAU-007 | Story | Finalize BRD v3.3 baseline with client (sign-off) | Must | 2 | BA | BRD |
+| VAU-007 | Story | Finalize BRD v3.4 baseline with client (sign-off) | Must | 2 | BA | BRD |
 | VAU-008 | Task | Create/seed Jira board, epics, labels | Must | 2 | SM | — |
 | VAU-009 | Task | Weekly review + retrospective | Must | 1 | SM | — |
 
@@ -187,7 +188,7 @@ This document is the **single planning source** for creating the Vaultory Jira b
 | VAU-052 | Task | Handover: source, deployment access/instructions, credentials | Must | 3 | SA/TL | SOW D-9 |
 | VAU-053 | Task | Final report + retrospective | Should | 2 | SM | — |
 
-**Sprint 3 exit:** Signed acceptance; AI features + dashboards live; app live on Vercel/Render; handover complete.
+**Sprint 3 exit:** Signed acceptance; AI features + dashboards live; app live on Vercel + Render + Supabase; handover complete.
 
 ---
 
@@ -218,7 +219,7 @@ A story is **Ready** for a sprint when:
 A story is **Done** when:
 1. Code merged to main via PR.
 2. Meets acceptance criteria / tests pass (backend + frontend).
-3. UI verified on the live (Vercel/Render) environment.
+3. UI verified on the live (Vercel/Render + Supabase) environment.
 4. RBAC + masking verified for the affected data.
 5. No P0/P1 defects open for the story.
 6. Audit/reporting impact considered and tested.
@@ -293,7 +294,7 @@ A story is **Done** when:
 ## 14. Risks & Assumptions
 
 - **Velocity/re-scoping:** Should/Could items may be deferred; Musts are protected.
-- **Free-tier limits:** 1 Vercel project + 1 Render service; sleep/cold-start acceptable (BRD §8.5).
+- **Free-tier limits:** 1 Vercel project + 1 Render service + Supabase (Postgres/Auth/Storage) + Groq credits; sleep/cold-start acceptable (BRD §8.5).
 - **Client availability:** sign-offs & UAT within cadence assumed; delays extend timeline pro-rata (SOW §6).
 - **AI data:** insufficient history handled via fallbacks (SRS §8).
 - **Change Control:** all scope changes go through CR process (BRD §21 / SOW §10).
@@ -313,4 +314,4 @@ A story is **Done** when:
 
 ---
 
-*End of Sprint Planner — Version 1.0 · Project: Vaultory · Team: Vaultory*
+*End of Sprint Planner — Version 2.1 · Project: Vaultory · Team: Vaultory*

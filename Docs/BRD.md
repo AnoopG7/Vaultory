@@ -5,7 +5,7 @@
 | **Document ID** | BRD-VAULTORY-001 |
 |---|---|---|
 | **Project Name** | **Vaultory** |
-| **Version** | 3.3 |
+| **Version** | 3.4 |
 | **Status** | Draft for Review & Sign-off |
 | **Prepared By** | Ved Naik (Business Analyst) & Anoop Gupta (Solutions Architect) — Vaultory Project Team |
 | **Date** | 29/08/2026 |
@@ -24,6 +24,7 @@
 | 3.1 | 29/08/2026 | Ved Naik (BA) & Anoop (SA) | Added team name & team members (Project Team section); updated Approvals & Stakeholders |
 | 3.2 | 29/08/2026 | Ved Naik (BA) & Anoop (SA) | Renamed project to Vaultory (co-shared with company name) |
 | 3.3 | 29/08/2026 | Ved Naik (BA) & Anoop (SA) | Deployed hosting: Vercel (frontend) + Render (backend) free tier kept live; GCP/AWS reserved for post-handover (Phase 2) |
+| 3.4 | 29/08/2026 | Ved Naik (BA) & Anoop (SA) | Locked stack: React + Tailwind + **shadcn/ui** frontend (Vercel); **Node.js** backend + AI via **Groq API** (Render); **Supabase** for PostgreSQL + Auth (email/OTP) + Storage |
 
 ---
 
@@ -110,7 +111,7 @@ Vaultory solves these by providing:
 - **An executive monitoring dashboard** for senior stakeholders covering inventory + sales across all stores.
 - **Value-add features** (categories, fast/slow-mover identification, supplier performance, KPI dashboards, bulk import/export, audit viewer, onboarding wizard) that deepen the inventory/sales value without leaving the domain.
 - **A secure backend** — data stored in a database, sensitive product information **masked**, and the app kept **live** for the final product (hosted on **Vercel + Render** free tier; see Section 8.5).
-- **A modern tech stack** — **React** frontend, **Node.js or Python** backend, **PostgreSQL** database (full stack in Section 8.4).
+- **A modern tech stack** — **React** frontend, **Node.js** backend, **Supabase-PostgreSQL** database + auth + storage (full stack in Section 8.4).
 
 ---
 
@@ -192,17 +193,19 @@ Vaultory solves these by providing:
 | **GCP** | Google Cloud Platform — reserved for **post-handover** production deployment (Phase 2) |
 | **AWS** | Amazon Web Services — alternative reserved for **post-handover** production deployment (Phase 2) |
 | **Vercel** | Frontend hosting platform (Hobby free tier) used to keep the **final product live** (Phase 1) |
-| **Render** | Backend hosting platform (free tier, ~750 hrs/mo) used to keep the **final product live** (Phase 1) |
-| **Free Tier** | No-cost hosting allowance (Vercel Hobby; Render ~750 hrs/mo per account) sufficient for Phase 1 |
+| **Render** | Backend hosting platform (free tier, ~750 hrs/mo) used to host the **Node.js backend + AI service** and keep the **final product live** (Phase 1) |
+| **Supabase** | Managed open-source backend services used by Vaultory for **PostgreSQL database**, **Auth (email/password + email OTP)**, and **Object Storage** only (not used as a full backend-as-a-service) |
+| **Groq** | Cloud provider of fast LLM inference — used by the Vaultory AI service for **forecasting / recommendation reasoning & explanations** (via API key) |
+| **shadcn/ui** | Open-source React component library built on Tailwind CSS — used for the Vaultory UI components |
+| **Free Tier** | No-cost allowance across Vercel (Hobby), Render (~750 hrs/mo), Supabase (free), and Groq (free-tier credits/limits) sufficient for Phase 1 |
 | **UAT** | User Acceptance Testing |
 | **RPO / RTO** | Recovery Point Objective / Recovery Time Objective (backup metrics) |
 | **CR / CRF** | Change Request / Change Request Form |
-| **AI** | Artificial Intelligence (the rule+forecast engine in Vaultory) |
+| **AI** | Artificial Intelligence (the rule+forecast engine in Vaultory, using the Groq API for reasoning/recommendations) |
 | **Warehouse** | Central storage that supplies the stores |
 | **React** | JavaScript/TypeScript library used for the Vaultory frontend (SPA) |
-| **Node.js** | JavaScript runtime — one of the two allowed backend options (Option A) |
-| **Python** | Programming language — the other allowed backend option (Option B) and the stack for the AI/forecasting service |
-| **PostgreSQL** | Relational database used for Vaultory data (hosted with the Phase-1 provider) |
+| **Node.js** | JavaScript runtime — the Vaultory backend (Express/NestJS) + AI service; also runs TypeScript for type safety |
+| **PostgreSQL** | Relational database used for Vaultory data (hosted via **Supabase** on the Phase-1 free tier) |
 
 ---
 
@@ -271,9 +274,9 @@ Vaultory is built to resolve **all ten** of these points (mapped one-to-one to r
 
 ### 8.2 Technical Scope In Scope
 - Web application (responsive: desktop/tablet/mobile browsers).
-- Backend database (relational, **PostgreSQL**) for persistent storage.
+- Backend database (relational, **PostgreSQL** hosted via **Supabase**) for persistent storage.
 - RESTful API for UI↔backend communication.
-- Deployment & hosting on **Vercel (frontend) + Render (backend)** — free tier, kept live for the final product (see **8.5 Deployment Strategy**).
+- Deployment & hosting on **Vercel (frontend) + Render (backend) + Supabase (Postgres/Auth/Storage)** — free tier, kept live for the final product (see **8.5 Deployment Strategy**).
 - **Data masking** for sensitive product info (DB + app layers).
 - Authentication + RBAC.
 - Audit logging of significant actions.
@@ -290,42 +293,44 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 | Layer | Technology (Agreed) | Purpose / Notes |
 |---|---|---|
 | **Frontend** | **React** (with TypeScript) | SPA UI; component-based, responsive, fast. |
-| **UI Styling / Components** | Tailwind CSS + component library (e.g., Material UI or shadcn) | Consistent, responsive design; charts via Recharts/Chart.js. |
-| **State / Data Fetching** | React Hooks + TanStack Query (React Query) + Redux/Zustand | Client-side state, caching, server state. |
-| **Backend (option A)** | **Node.js** (Express / NestJS) + TypeScript | RESTful API, business logic. |
-| **Backend (option B)** | **Python** (FastAPI / Django) | Alternative backend; chosen per team strength at SRS. |
-| **AI / Forecasting Engine** | Python-based service (statistical forecasting: e.g., moving average, exponential smoothing, optional lightweight model) | Separate, explainable AI microservice. |
-| **Database** | **PostgreSQL** (relational) | Core transactional data per Section 14.1; hosted via the backend's free-tier provider at build time (see Deployment & Hosting below). |
+| **UI Styling / Components** | Tailwind CSS + **shadcn/ui**; charts via **Recharts** | Consistent, responsive design; reusable components and data-viz. |
+| **State / Data Fetching** | React Hooks + TanStack Query (React Query) + Zustand | Client-side state, caching, server state. |
+| **Backend** | **Node.js** (Express / NestJS) + TypeScript | RESTful API, business logic, RBAC enforcement, masking. |
+| **AI / Forecasting Engine** | Node.js service calling the **Groq API** (LLM reasoning for demand forecast, reorder quantity & warehouse-level recommendations with explainable rationale) | Explainable AI microservice; deterministic rules (reorder point, no-duplicate PO, consent) stay in the Node backend. |
+| **Database** | **PostgreSQL** (**Supabase**-hosted, free tier) | Core transactional data per Section 14.1; managed & kept live via Supabase. |
 | **Caching / Sessions** | Redis (optional) | Sessions, rate limiting, fast lookups (optional, if within free-tier limits). |
-| **Object Storage** | Provider object storage (Vercel Blob / Render disk / Supabase storage) | Exported reports, files (kept within free-tier limits). |
+| **Object Storage** | **Supabase Storage** (free tier) | Exported reports, files (kept within free-tier limits). |
 | **API** | REST (JSON) over HTTPS | UI ↔ backend ↔ AI service. |
-| **Auth & RBAC** | JWT / OAuth2 + role middleware | Secure authentication & authorization. |
-| **Deployment / Hosting (live, free tier)** | **Vercel (Hobby, free) for the React frontend** + **Render (free tier, ~750 hrs/mo) for the Node/Python backend** | Keeps the **final product live** for the client during and after the project (see 8.5 Deployment Strategy). |
+| **Auth & RBAC** | **Supabase Auth** (email/password + **email OTP**/magic link) issuing JWTs; **Node** role middleware | Authentication & authorization; Node validates the Supabase JWT and enforces role/permission on every route. |
+| **Deployment / Hosting (live, free tier)** | **Vercel (Hobby, free) for the React frontend** + **Render (free tier, ~750 hrs/mo) for the Node.js backend/AI service** + **Supabase (free) for Postgres/Auth/Storage** | Keeps the **final product live** for the client during and after the project (see 8.5 Deployment Strategy). |
 | **Monitoring / Logging** | Vercel + Render built-in logs/metrics (free tier) | Ops visibility for the hosting period. |
-| **Security** | TLS/HTTPS, encryption at rest, data masking | Per FR-SEC / Section 14.2. |
-| **Backup** | Provider-managed backups (where available on free tier) + scheduled exports | Data safeguarded for the hosting period. |
+| **Security** | TLS/HTTPS, encryption at rest, data masking, **secrets as env vars** (Groq API key, Supabase keys) | Per FR-SEC / Section 14.2. |
+| **Backup** | Supabase managed backups + scheduled exports | Data safeguarded for the hosting period. |
 | **CI/CD** | Git-based auto-deploy (GitHub + Vercel/Render) | Merge/commit triggers automatic deploy. |
 
-**Stack decisions to confirm at SRS (minor, non-scope):** Node vs. Python backend (Option A or B above), component library, and charting library. Either choice delivers identical features.
+> The stack above is **locked** for v1.0 — **React + Tailwind + shadcn/ui (frontend), Node.js (backend + AI via Groq), Supabase (PostgreSQL/Auth/Storage)**. No further backend/UI choices remain open. Any change is a **Change Request**.
 
 ### 8.5 Deployment & Hosting Strategy (Two Phases)
 
 > This defines **where** Vaultory runs and how it stays live, split into two clear phases so the client's expectations are explicit and no scope confusion occurs after handover.
 
-| Phase | Period | Frontend | Backend / DB | Purpose |
+| Phase | Period | Frontend | Backend / DB / AI | Purpose |
 |---|---|---|---|---|
-| **Phase 1 — Build & Final-Product Hosting (free tier)** | Throughout the project and **kept live for the final product** | **Vercel** (Hobby, free tier, 1 project/account) | **Render** (free tier, ~750 hrs/mo, 1 project/account) | Demo, UAT, and the **final deliverable** kept live for the client. |
+| **Phase 1 — Build & Final-Product Hosting (free tier)** | Throughout the project and **kept live for the final product** | **Vercel** (Hobby, free tier, 1 project/account) | **Render** (free tier, ~750 hrs/mo, 1 project/account) hosting the **Node.js backend + AI service** + **Supabase** (free) for **PostgreSQL / Auth / Storage** | Demo, UAT, and the **final deliverable** kept live for the client. |
 | **Phase 2 — Post-Handover / Production** | **After handover** (separate initiative / Change Request) | **GCP or AWS** (managed hosting) | **GCP or AWS** (Cloud SQL / RDS etc.) | Enterprise-grade, managed, scaled production. |
 
 **Free-tier details (agreed):**
 - **Vercel Hobby** supports one project on one account for free — used for the React frontend.
-- **Render free tier** offers **750 free hours/month** per service on one account — used for the Node/Python backend, adequate for a single always-on app (750 hrs ≈ a single service running ~24/7, or two services staggered).
-- **Yes — the free tier is sufficient** for 1 frontend project (Vercel) + 1 backend service (Render) on one account each, and it will keep the **final product live** for the client.
+- **Render free tier** offers **750 free hours/month** per service on one account — used for the **Node.js backend + AI service**, adequate for a single always-on app (750 hrs ≈ a single service running ~24/7, or two services staggered).
+- **Supabase free tier** provides a hosted **PostgreSQL** database, **Auth** (email/password + email OTP), and **Storage** — adequate for this project's scale.
+- **Groq API** free tier supplies LLM inference for the AI service; the **API key is stored as a secret environment variable on Render** (never committed to the repo).
+- **Yes — the free tier is sufficient** for 1 frontend project (Vercel) + 1 backend service (Render) + Supabase (Postgres/Auth/Storage) + Groq credits on one account each, and it will keep the **final product live** for the client.
 
 **Constraints & limitations of the free tier (accepted):**
-- Free-tier services may **sleep/pause** after idle periods (Render) and have **cold-start** latency.
+- Free-tier services may **sleep/pause** after idle periods (Render) and have **cold-start** latency; Supabase free projects pause after ~1 week of inactivity.
 - Free-tier **uptime is not guaranteed** and is **lower than the 99.5% target** in NFR-4. If the client requires a guaranteed SLA during the build phase, that is a **Change Request** (move to Phase 2 paid hosting earlier).
-- Free-tier has **resource limits** (compute, bandwidth, storage); within this project's scale these are sufficient.
+- Free-tier has **resource limits** (compute, bandwidth, storage, Groq rate limits); within this project's scale these are sufficient.
+- The **Groq API** and **Supabase** are external services; availability follows their free-tier terms (best-effort).
 
 > **Phase 2 (GCP/AWS) is explicitly OUT OF SCOPE for the build/final-delivery phase.** It is listed here only to set clear ownership: moving to GCP/AWS happens **after handover** and is a separate engagement / Change Request, not part of the current delivery.
 
@@ -678,7 +683,7 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 | NFR-1 | Performance | Dashboards/inventory views load ≤ 3s under normal load. | M |
 | NFR-2 | Performance | Data entered reflected in reports within 5 minutes (near real-time). | M |
 | NFR-3 | Scalability | Supports 3 stores, multiple warehouses, ≥50 concurrent users. | M |
-| NFR-4 | Availability | **Phase 1 (free tier):** best-effort availability on Vercel/Render; free-tier sleep/cold-start accepted (GCP/AWS production target of 99.5% applies to **Phase 2** post-handover). | M |
+| NFR-4 | Availability | **Phase 1 (free tier):** best-effort availability on Vercel/Render + Supabase/Groq; free-tier sleep/cold-start accepted (GCP/AWS production target of 99.5% applies to **Phase 2** post-handover). | M |
 | NFR-5 | Security | TLS for transit; encryption at rest. | M |
 | NFR-6 | Security | Secure password hashing; rate-limited login. | M |
 | NFR-7 | Data Protection | Sensitive product info masked (Section 14). | M |
@@ -813,7 +818,7 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 
 ## 15. AI Engine — Detailed Behavior
 
-> Vaultory's "AI" is a **deterministic demand-forecast + rule engine** (not a black box). Every decision is **explainable** and **auditable**, and **never overrides configured consent** (auto-ordering must be enabled; recommendations are advisory).
+> Vaultory's "AI" combines a **deterministic demand-forecast + rule engine** with **LLM reasoning via the Groq API**. The rule engine enforces safety/reorder/consent and quantity math; the Groq-backed service produces forecasts and plain-language, **explainable** recommendations. Every decision is **auditable** and **never overrides configured consent** (auto-ordering must be enabled; recommendations are advisory). Groq API keys are stored as secret environment variables and never committed.
 
 ### 15.1 Automated Ordering — Trigger & Quantity
 - **Trigger:** on-hand ≤ reorder point AND auto-order enabled AND no blocking open PO.
@@ -835,6 +840,7 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 
 ### 15.3 Explainability & Audit Guarantees
 - Every recommendation/order records: inputs (on-hand, target, open PO, lead time, forecast), the computed value, and `accepted/rejected`.
+- The Groq-generated rationale is stored alongside each recommendation for audit and transparency.
 - AI **never** bypasses RBAC or the auto-order consent flag (FR-E7 / FR-AI-01.1).
 
 > **Scope note (avoids AI scope-creep):** AI covers (1) auto-ordering, (2) warehouse stock recommendations, and (3) demand forecasting to support these. It does **not** include general predictive analytics, custom model training, chat/AI assistants, or other AI use-cases (see L-21).
@@ -885,12 +891,12 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 ## 18. Constraints & Limitations
 
 ### 18.1 Technical Constraints
-1. Must be **deployed & kept live** on **Vercel (frontend)** and **Render (backend)** free tier for the final product (Phase 1). **GCP/AWS are reserved for post-handover** production (Phase 2) and are out of scope for this delivery.
-2. Data persisted in a **database** (relational recommended — **PostgreSQL**).
+1. Must be **deployed & kept live** on **Vercel (frontend)** + **Render (Node.js backend/AI)** + **Supabase (Postgres/Auth/Storage)** free tier for the final product (Phase 1). **GCP/AWS are reserved for post-handover** production (Phase 2) and are out of scope for this delivery.
+2. Data persisted in a **database** (relational — **PostgreSQL**, hosted via **Supabase**).
 3. Sensitive product info **masked**.
 4. Web-based, responsive; no native mobile apps (L-1).
-5. Frontend **must** use **React**; backend **must** use **Node.js or Python** (per Section 8.4 agreed stack). The selected backend option is locked at the SRS and becomes a fixed constraint thereafter.
-6. Free-tier limits apply: **1 project on Vercel (Hobby)** and **~750 hrs/month on Render** per account. Free-tier services may sleep/idle and have lower availability (see NFR-4).
+5. Frontend **must** use **React + Tailwind + shadcn/ui**; backend **must** use **Node.js (Express/NestJS)**; database/auth/storage via **Supabase**; AI via the **Groq API** (per Section 8.4 locked stack).
+6. Free-tier limits apply: **1 project on Vercel (Hobby)** and **~750 hrs/month on Render** per account; **Supabase free** (DB/Auth/Storage) and **Groq free-tier credits**. Free-tier services may sleep/idle and have lower availability (see NFR-4).
 
 ### 18.2 Schedule / Resource Constraints
 1. **Agile/Scrum** delivery; fixed sprint cadence (see Sprint Planner).
@@ -923,7 +929,7 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 | AC-9 | Senior stakeholders access executive dashboard (inventory + sales, drill-down) | FR-MON-02 |
 | AC-10 | Login + RBAC enforced; users only see permitted data/menus | FR-USER |
 | AC-11 | Sensitive product info masked in DB & to unauthorized roles | FR-SEC |
-| AC-12 | App **deployed & kept live** on Vercel (frontend) + Render (backend) free tier with a working PostgreSQL database | NFR-4, G-9, §8.5 |
+| AC-12 | App **deployed & kept live** on Vercel (frontend) + Render (Node.js backend/AI) + Supabase (Postgres/Auth/Storage) free tier with a working database | NFR-4, G-9, §8.5 |
 | AC-13 | Dashboards ≤3s; near-real-time updates | NFR-1, NFR-2 |
 | AC-14 | Client confirms all Out-of-Scope items (Section 9) by signature | Section 9 |
 
@@ -939,7 +945,7 @@ Products/SKUs, categories, units, stores (3), warehouses, suppliers, purchase or
 | R-4 | AI forecast inaccuracy → low adoption | Med | Med | Explainable AI, fallback defaults, advisory-only, UAT education |
 | R-5 | Masking misconfiguration → data exposure | High | Med | SA security review, least-privilege, masking tests, audit logs |
 | R-6 | Small-team (5 members) delivery & dependency on each role-holder | Med | High | MoSCoW-prioritized backlog, time-boxed sprints, Musts first; clear role ownership to avoid bottlenecks |
-| R-7 | Free-tier hosting limits (sleep/cold-start/uptime) affecting live demo | Med | Med | Use Vercel/Render free tiers within limits; 1 project/account; communicate free-tier availability (NFR-4); Phase 2 (GCP/AWS) as a separate Change Request if a guaranteed SLA is needed |
+| R-7 | Free-tier hosting limits (sleep/cold-start/uptime) affecting live demo | Med | Med | Use Vercel/Render/Supabase/Groq free tiers within limits; 1 project/account; store Groq/Supabase keys as secrets; communicate free-tier availability (NFR-4); Phase 2 (GCP/AWS) as a separate Change Request if a guaranteed SLA is needed |
 | R-8 | Delayed sign-off / UAT feedback | Med | Med | Agreed response times, scheduled checkpoints |
 | R-9 | Data loss / corruption | High | Low | Automated backups, defined RPO/RTO, restore testing |
 
@@ -1009,7 +1015,7 @@ Every "Sir said" point maps to covered requirements:
 ### 23.3 Client Sign-off Checklist
 - [ ] Confirm 3-store scope (Section 8 → not beyond L-14).
 - [ ] Review & accept Out-of-Scope list (Section 9).
-- [ ] Confirm **technology stack** — React frontend, Node.js/Python backend, PostgreSQL (Section 8.4).
+- [ ] Confirm **technology stack** — React + Tailwind + shadcn/ui frontend, Node.js backend (Express/NestJS) + AI via Groq API, Supabase (PostgreSQL/Auth/Storage) (Section 8.4).
 - [ ] Confirm **Deployment: Vercel (frontend) + Render (backend) free tier kept live** for the final product; GCP/AWS reserved for **post-handover** only (Sections 8.4–8.5).
 - [ ] Confirm masking fields in SRS (Section 14).
 - [ ] Confirm AI scope = auto-ordering + warehouse recommendation only (Section 15).

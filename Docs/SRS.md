@@ -4,12 +4,12 @@
 
 | **Document ID** | SRS-VAULTORY-001 |
 |---|---|
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Draft for Review & Sign-off |
 | **Prepared By** | Anoop (Solutions Architect) — Vaultory |
 | **Date** | 29/08/2026 |
 | **Client / Sponsor** | Small Business Retailer (Prof) |
-| **Base Document** | BRD v3.3 (BRD-VAULTORY-001) |
+| **Base Document** | BRD v3.4 (BRD-VAULTORY-001) |
 
 ---
 
@@ -18,6 +18,7 @@
 | Version | Date | Author | Description of Change |
 |---|---|---|---|
 | 1.0 | 29/08/2026 | Anoop (Solutions Architect) | Initial SRS derived from BRD v3.3 |
+| 1.1 | 29/08/2026 | Anoop (Solutions Architect) | Locked stack per BRD v3.4: React+Tailwind+shadcn/ui, Node.js backend + AI via Groq API, Supabase (Postgres/Auth incl. email OTP/Storage); resolved TBD-1 (Node) & TBD-2 (shadcn + Recharts) |
 
 ---
 
@@ -59,7 +60,7 @@
 ## 1. Introduction
 
 ### 1.1 Purpose
-This Software Requirements Specification (SRS) describes in technical detail **what the Vaultory application must do** so the development team (Tech Lead + team) can design, code, and test it, and the client can confirm the behavior. It is derived from, and fully consistent with, the **BRD v3.3**. Every requirement in the BRD is traced to a technical specification here (see Section 14).
+This Software Requirements Specification (SRS) describes in technical detail **what the Vaultory application must do** so the development team (Tech Lead + team) can design, code, and test it, and the client can confirm the behavior. It is derived from, and fully consistent with, the **BRD v3.4**. Every requirement in the BRD is traced to a technical specification here (see Section 14).
 
 ### 1.2 Product Scope Summary
 Vaultory is a web-based inventory and sales management application for a small retailer with **3 stores**. It provides:
@@ -88,10 +89,11 @@ Vaultory is a web-based inventory and sales management application for a small r
 Vaultory is an independent, self-contained web application. It does **not** integrate with external systems in this version (BRD §9). It consists of:
 
 ```
-[ React SPA (Vercel) ]  <->  [ REST API (Render: Node.js or Python) ]  <->  [ PostgreSQL DB ]
-                                       |
-                                       v
-                         [ AI / Forecasting module (same backend) ]
+[ React SPA (Vercel) ]  <->  [ REST API + AI service (Render: Node.js) ]  <->  [ Supabase ]
+                                                                    (PostgreSQL + Auth + Storage)
+                                                                          |
+                                                                          v
+                                                       [ Groq API (LLM reasoning / forecasting) ]
 ```
 
 ### 2.2 User Classes & Characteristics
@@ -106,18 +108,19 @@ Vaultory is an independent, self-contained web application. It does **not** inte
 - **Browser:** modern evergreen browsers (Chrome 90+, Firefox 90+, Edge 90+, Safari 14+).
 - **Devices:** responsive — desktop, tablet, mobile browser.
 - **Network:** internet required; HTTPS only.
-- **Hosting:** Vercel (frontend), Render (backend), free tier (BRD §8.5). GCP/AWS are Phase-2 post-handover only.
+- **Hosting:** Vercel (frontend), Render (backend/AI), Supabase (Postgres/Auth/Storage), Groq API (AI inference) — free tier (BRD §8.5). GCP/AWS are Phase-2 post-handover only.
 
 ### 2.4 Design & Implementation Constraints
-1. Frontend: **React (TypeScript)**.
-2. Backend: **Node.js** (Express/NestJS) **or** **Python** (FastAPI/Django). (Final choice at SRS sign-off — TBD item in §15.)
-3. Database: **PostgreSQL**.
-4. Deployment: **Vercel + Render** free tier (1 project/account each).
-5. All sensitive product information **masked**.
-6. Single currency, single language.
+1. Frontend: **React (TypeScript)** + **Tailwind CSS** + **shadcn/ui**; charts via **Recharts**.
+2. Backend: **Node.js** (Express **or** NestJS). *(Locked at BRD v3.4 — no Python.)*
+3. Database/backend services: **Supabase** for **PostgreSQL** + **Auth** (email/password + email OTP) + **Object Storage**.
+4. AI: Node.js AI service calling the **Groq API** (LLM reasoning/forecasting).
+5. Deployment: **Vercel + Render + Supabase** free tier (BRD §8.5); Groq API key as a secret env var on Render.
+6. All sensitive product information **masked**.
+7. Single currency, single language.
 
 ### 2.5 Assumptions & Dependencies
-Same as BRD §17 (3 stores, single currency/language, manual sales entry, client-provided master data, Vercel/Render free-tier accounts).
+Same as BRD §17 (3 stores, single currency/language, manual sales entry, client-provided master data, Vercel/Render/Supabase free-tier accounts, Groq free-tier API access).
 
 ---
 
@@ -130,7 +133,7 @@ Identical to BRD §8 — all modules listed in the BRD (Inventory, Sales, Safety
 Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, POS, CRM, accounting, supplier portal, multi-currency, etc.).
 
 ### 3.3 References
-- **BRD v3.3** — Business Requirements Document (BRD-VAULTORY-001).
+- **BRD v3.4** — Business Requirements Document (BRD-VAULTORY-001).
 - Problem Statement — Product 5: Small Business Inventory and Sales App (22/08/2026).
 
 ---
@@ -298,10 +301,12 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 ### 4.6 MODULE: User Management & RBAC
 
 #### 4.6.1 FR-USER-01 — Authentication
-- Login: `email/username + password`; password stored as bcrypt hash (cost 12).
-- Session: JWT (access 15 min) + refresh token (7 days) in HttpOnly cookie for SPA.
-- Logout invalidates refresh token.
-- Rate-limit: 5 failed attempts → lock 15 min.
+- Login via **Supabase Auth**: **email/password** and **email OTP (magic link)** passwordless sign-in, both enabled.
+- Email OTP: Supabase sends a one-time code / magic link to the user's email; code expires per Supabase config (default 3–10 min) and is single-use.
+- Passwords and OTP handling are managed by **Supabase Auth** (not implemented in the Node backend).
+- Session: Supabase-issued **JWT (access token)** validated by the **Node backend** role middleware on every protected route; refresh token handled by Supabase (default 1-hour access + refresh lifecycle).
+- Logout invalidates the Supabase session.
+- Rate-limit / lockout: configure in **Supabase Auth** settings (e.g., max failed attempts before cooldown).
 
 #### 4.6.2 FR-USER-02 — Roles & Permissions
 - Roles ENUM: `ADMIN`, `STORE_STAFF`, `SALES_PERSONNEL`, `SENIOR_STAKEHOLDER`.
@@ -324,8 +329,8 @@ None (no POS, scanners, printers — BRD L-4).
 
 ### 5.3 Software Interfaces
 - **REST API** between frontend and backend (JSON over HTTPS). Standards: RESTful resources, snake_case JSON, ISO-8601 timestamps, standardized error envelope `{ error: { code, message, details? } }`.
-- **DB interface:** ORM (Prisma for Node / SQLAlchemy for Python) against PostgreSQL.
-- **AI module:** in-process service function (no external ML provider).
+- **DB interface:** Node backend connects to **Supabase PostgreSQL** using the **Supabase JS/Postgres client** (or a Node driver/ORM such as Prisma) over the Supabase connection string.
+- **AI module:** Node.js AI service that calls the **Groq API** (external LLM endpoints via HTTPS) for forecasting/recommendation reasoning, using secrets from env vars; deterministic rules stay in the Node backend.
 
 ### 5.4 Communication Interfaces
 - HTTPS only (TLS 1.2+). CORS restricted to the Vercel frontend origin. Rate limiting on auth endpoints.
@@ -334,10 +339,12 @@ None (no POS, scanners, printers — BRD L-4).
 
 ## 6. Data & Database Specifications
 
-### 6.1 Schema (PostgreSQL)
+### 6.1 Schema (PostgreSQL via Supabase)
+
+> **Auth note:** user authentication/sessions live in **Supabase Auth** (`auth.users`), which also issues the OTP/magic-link and JWT tokens. The application `users` table below is the **profile/role table**, linked to the Supabase auth user (e.g., by `auth.uid()`), storing `role`, `store_id`, and status for RBAC.
 
 ```
-users            (id, name, email UNIQUE, password_hash, role ENUM, store_id FK?, status, created_at, updated_at)
+users            (id UUID PK = auth.uid(), name, role ENUM, store_id FK?, status, created_at, updated_at)  -- profile/role; auth in Supabase auth.users
 stores           (id, name, city, address, status)
 warehouses       (id, name, address, status)
 locations        (id, type ENUM(store,warehouse), store_id?, warehouse_id?, status)   -- unified view
@@ -434,14 +441,18 @@ For each (product, warehouse):
 5. User action: ACCEPT (writes to safety_stock_rules / inventory target), MODIFY (edits then accept), REJECT (logged).
 
 ### 8.3 Forecasting Method (v1.0)
-- **Simple moving average / exponential smoothing** over sales history by product-location.
-- Trend/seasonality = optional refinement if data volume supports it (not a separate external ML platform — BRD L-21).
-- All AI inputs, computations, and outcomes recorded in `ai_recommendations` for audit.
+- The AI service is a **Node.js module that calls the Groq API** (LLM inference) for demand forecasting and recommendation reasoning.
+- Deterministic inputs (recent sales, window = 90 days default, min 14 days required) are passed to Groq; fallback to **simple moving average / exponential smoothing** in the Node backend if no LLM output or insufficient data.
+- Trend/seasonality = optional refinement if data volume supports it (scope limited to auto-ordering + warehouse recommendation — BRD L-21).
+- All AI inputs, computations (deterministic + Groq output), and outcomes recorded in `ai_recommendations` for audit.
+- **Groq availability/resilience:** the AI reasoner is advisory; if the Groq API is unavailable (or free-tier rate limits are hit), the system falls back to deterministic forecasts and still functions (alerts/auto-order still work via rules).
 
 ### 8.4 AI Constraints
 - AI is **advisory**; never executes an order without the auto-order consent flag.
 - AI never bypasses RBAC or masking.
 - Every recommendation explainable and auditable.
+- **Groq API key** is stored as a secret environment variable (Render); never logged or committed.
+- AI must **degrade gracefully** (deterministic fallback) if the Groq API is unavailable or rate-limited — core inventory/sales/alerts must not depend on the LLM.
 
 ---
 
@@ -454,7 +465,7 @@ For each (product, warehouse):
 | NFR-3 | Scalability | 3 stores, multiple warehouses, ≥ 50 concurrent users. |
 | NFR-4 | Availability | Phase-1 free tier: best effort (sleep/cold-start accepted). Phase-2: 99.5%. |
 | NFR-5 | Security | TLS 1.2+; encryption at rest. |
-| NFR-6 | Security | bcrypt hashing (cost 12); auth rate-limit/lockout. |
+| NFR-6 | Security | Authentication & OTP handled by **Supabase Auth**; Node backend validates Supabase JWTs for RBAC; rate-limit/lockout configured in Supabase Auth. |
 | NFR-7 | Data Protection | Masking per Section 7. |
 | NFR-8 | Usability | Responsive UI; ≤3 clicks to core actions; clear labels. |
 | NFR-9 | Maintainability | Modular code, documented, linted; CI on push. |
@@ -469,13 +480,13 @@ For each (product, warehouse):
 ## 10. Security Requirements
 
 1. HTTPS only; HSTS enabled.
-2. Passwords hashed (bcrypt cost 12); no plaintext.
-3. JWT access (15 min) + refresh (7 days, HttpOnly cookie); RBAC middleware on every protected route.
-4. Rate limiting & lockout on login; global API rate limit per IP.
-5. Input validation on all inputs (server-side), parameterized SQL via ORM.
+2. Authentication & password/OTP handling via **Supabase Auth** (no plaintext; passwords managed by Supabase).
+3. **JWT issued by Supabase Auth**, validated by Node backend (RBAC + role middleware) on every protected route.
+4. Rate limiting & lockout on login (configured in **Supabase Auth**); global API rate limit per IP on the Node backend.
+5. Input validation on all inputs (server-side), parameterized SQL via the Supabase/Postgres client.
 6. Masking of sensitive fields (Section 7).
 7. CORS restricted to frontend origin; security headers (CSP, X-Frame-Options).
-8. Dependency scanning in CI; `.env` secrets never committed (Vercel/Render env vars).
+8. Dependency scanning in CI; `.env` secrets never committed — **Supabase** and **Groq** keys stored as env vars on **Render**.
 9. Audit logging of significant actions.
 10. No logging of raw sensitive data or credentials.
 
@@ -486,7 +497,7 @@ For each (product, warehouse):
 > Screens are listed with their purpose, key controls, and role visibility. Role symbols: A=Admin, SS=Store Staff, SP=Sales Personnel, SK=Senior Stakeholder.
 
 ### 11.1 Login
-- Email + password; show role-aware redirect after login; error on invalid creds; lockout message if locked.
+- Email + password **or email OTP (magic link)** sign-in (Supabase Auth); show role-aware redirect after login; error on invalid creds; lockout message if locked.
 
 ### 11.2 Dashboard (role-aware)
 - A/SK: inventory health KPIs + sales summary + low-stock alerts (widgets per FR-DSH).
@@ -590,9 +601,9 @@ Each BRD acceptance criterion (AC-1…AC-14) is verified by one or more **test c
 | T-AC7 | Run AI warehouse recommendation | Rationale shown; accept/modify/reject works & logged |
 | T-AC8 | Sales personnel view store performance | Per-store + comparison correct |
 | T-AC9 | Senior stakeholder opens executive dashboard | KPIs + drill-down work, near real-time |
-| T-AC10 | Login & RBAC | Users see only permitted data/menus; unauthorized API → 403 |
+| T-AC10 | Login & RBAC | Email/password **and** email OTP (magic link) sign-in work (Supabase Auth); users see only permitted data/menus; unauthorized API → 403 |
 | T-AC11 | Check masking | Cost price masked to unauthorized roles & in DB/exports |
-| T-AC12 | Verify hosting | App live on Vercel + Render free tier; DB working |
+| T-AC12 | Verify hosting | App live on Vercel + Render (Node backend/AI) + Supabase (postgres/auth/storage) free tier; DB working |
 | T-AC13 | Performance | Dashboards ≤3s p95; reports reflect within 5 min |
 | T-AC14 | Out-of-scope confirm | Client sign-off in BRD §9 |
 
@@ -626,12 +637,12 @@ Each BRD acceptance criterion (AC-1…AC-14) is verified by one or more **test c
 
 | # | Item | Decision Needed By | Owner |
 |---|---|---|---|
-| TBD-1 | Backend: **Node.js** vs **Python** | SRS sign-off | SA (Anoop) + Tech Lead |
-| TBD-2 | Component & charting libraries (MUI/shadcn; Recharts/Chart.js) | SRS sign-off | SA/Tech Lead |
+| ~~TBD-1~~ | ~~Backend: Node.js vs Python~~ — **DECIDED: Node.js (BRD v3.4)** | Resolved | SA (Anoop) + Tech Lead |
+| ~~TBD-2~~ | ~~Component & charting libraries~~ — **DECIDED: shadcn/ui + Recharts (BRD v3.4)** | Resolved | SA/Tech Lead |
 | TBD-3 | Exact masked-field list confirmed by client | SRS sign-off | Client |
 | TBD-4 | AI auto-qty mode default (target-based vs forecast-based) | Sprint 3 | SA |
 | TBD-5 | Perishable (FR-EXP) inclusion in v1.0 (Could) | Sprint planning | SM/PM |
-| TBD-6 | Alert email provider/limit on free tier | Sprint 3 | Tech Lead |
+| TBD-6 | Alert email provider/limit on free tier | Sprint 3 | Tech Lead (may use Supabase Auth email / provider SMTP) |
 
 ---
 

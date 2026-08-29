@@ -4,12 +4,12 @@
 
 | **Document ID** | SOW-VAULTORY-001 |
 |---|---|
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Status** | Draft for Approval & Sign-off |
 | **Prepared By** | Laxman Patel (Project Manager) — Vaultory |
 | **Date** | 29/08/2026 |
 | **Client / Sponsor** | Small Business Retailer (Prof) |
-| **Base Documents** | BRD v3.3 · SRS v1.0 · Sprint Planner v2.0 |
+| **Base Documents** | BRD v3.4 · SRS v1.1 · Sprint Planner v2.0 |
 
 ---
 
@@ -19,6 +19,7 @@
 |---|---|---|---|
 | 1.0 | 29/08/2026 | Laxman Patel (PM) | Initial SOW |
 | 1.1 | 29/08/2026 | Laxman Patel (PM) | Compressed timeline to 3 sprints (29 Aug – 30 Sep 2026) per Sprint Planner v2.0 |
+| 1.2 | 29/08/2026 | Laxman Patel (PM) | Locked stack per BRD v3.4: React + Tailwind + shadcn/ui, Node.js backend + AI via Groq API, Supabase (PostgreSQL/Auth incl. email OTP/Storage) |
 
 ---
 
@@ -60,10 +61,10 @@
 ## 1. Project Overview
 
 ### 1.1 Summary
-Vaultory is a web-based Inventory & Sales application (SRS v1.0) for a small retailer operating **3 stores**. It gives the client real-time inventory visibility, automated AI reordering at safety stock, AI warehouse stock-level recommendations, daily/quarterly/yearly sales reports, store-wise sales monitoring, an executive dashboard, and full role-based access control with data masking.
+Vaultory is a web-based Inventory & Sales application (SRS v1.1) for a small retailer operating **3 stores**. It gives the client real-time inventory visibility, automated AI reordering at safety stock, AI warehouse stock-level recommendations, daily/quarterly/yearly sales reports, store-wise sales monitoring, an executive dashboard, and full role-based access control with data masking.
 
 ### 1.2 Objectives
-The engagement delivers the **working Vaultory application**, hosted and **kept live** on the **Vercel (frontend) + Render (backend)** free tier, exactly per the requirements in BRD v3.3 and SRS v1.0.
+The engagement delivers the **working Vaultory application**, hosted and **kept live** on the **Vercel (frontend) + Render (Node.js backend/AI) + Supabase (Postgres/Auth/Storage) + Groq API (AI)** free tier, exactly per the requirements in BRD v3.4 and SRS v1.1.
 
 ### 1.3 Parties
 - **Client:** Small Business Retailer (Prof), sponsoring and role-playing the real business owner.
@@ -76,18 +77,18 @@ The engagement delivers the **working Vaultory application**, hosted and **kept 
 ### 2.1 Work In Scope
 The delivery team will:
 
-1. Build the **Vaultory web application** per SRS v1.0:
+1. Build the **Vaultory web application** per SRS v1.1:
    - Inventory Management (multi-location: 3 stores + warehouses).
    - Sales Management with daily / quarterly / yearly reports.
    - Safety Stock Management with low-stock alerts.
    - Supplier & Procurement (Purchase Orders).
    - **AI Automated Ordering** (auto-PO when stock ≤ reorder point).
-   - **AI Warehouse Stock-Level Recommendations**.
+   - **AI Warehouse Stock-Level Recommendations** (via Groq API).
    - Sales Performance Monitoring (per store).
    - Executive Monitoring Dashboard (senior stakeholders).
    - User Management, RBAC, Data Masking, Audit Logging, Bulk Import/Export, Onboarding Wizard, and value-add modules (BRD §8.1).
-2. Set up and maintain the **React** frontend and **Node.js/Python** backend (DB: PostgreSQL).
-3. Deploy and keep the product **live on Vercel (frontend) + Render (backend)** free tier for the **final product**.
+2. Set up and maintain the **React + Tailwind + shadcn/ui** frontend and **Node.js** backend (database & auth via **Supabase**; AI via **Groq API**).
+3. Deploy and keep the product **live on Vercel (frontend) + Render (Node.js backend/AI) + Supabase (Postgres/Auth/Storage)** free tier for the **final product**.
 4. Provide **documentation**: this SOW set (BRD, SRS, SOW, Sprint Planner), and a short User Guide.
 5. Deliver **demo** and **UAT** (User Acceptance Testing) sessions.
 6. Hand over **source code**, deployment access/instructions, and credentials to the client.
@@ -102,7 +103,7 @@ The delivery team will:
 ### 2.3 Constraints
 - Delivery follows **Agile/Scrum** with time-boxed sprints (see Sprint Planner).
 - Fixed timeline and budget; changes require approved Change Requests (§10).
-- Free-tier limits: 1 Vercel project + 1 Render service (~750 hrs/mo) per account.
+- Free-tier limits: 1 Vercel project + 1 Render service (~750 hrs/mo) + Supabase (Postgres/Auth/Storage) + Groq API credits, per account.
 
 ---
 
@@ -128,7 +129,7 @@ The delivery team will:
 
 | Phase | Sprint(s) | Dates | Key Deliverables / Exit Criteria |
 |---|---|---|---|
-| **Foundation, Planning & Design** | Sprint 1 | 29 Aug – 8 Sep | BRD+SRS+SOW+Plan sign-off; project & environment setup (Vercel/Render/DB); DB schema; API design; UI mockups; auth foundation & core models |
+| **Foundation, Planning & Design** | Sprint 1 | 29 Aug – 8 Sep | BRD+SRS+SOW+Plan sign-off; project & environment setup (Vercel/Render/Supabase/Groq); DB schema; API design; UI mockups; auth foundation (Supabase Auth incl. OTP) & core models |
 | **Core Build — Inventory, Sales & Procurement** | Sprint 2 | 9 Sep – 19 Sep | Products, stock-in/out/transfer/adjust, sales recording, daily/qtr/yr reports, RBAC, safety stock + alerts, suppliers, manual POs, PO lifecycle |
 | **AI, Monitoring, Test & Handover** | Sprint 3 | 20 Sep – 30 Sep | AI auto-ordering + warehouse recommendations, dashboards, value-adds, QA/UAT, bug fixes, user guide, demo, acceptance, handover (code + access) |
 
@@ -142,7 +143,7 @@ The delivery team will:
 |---|---|---|
 | Project Manager | Laxman Patel | Scope/schedule/budget control, client communication, CR handling |
 | Business Analyst | Ved Naik | Requirement confirmation, UAT coordination, requirement traceability |
-| Solutions Architect | Anoop Gupta | Architecture, DB design, masking, deployment design (Vercel/Render) |
+| Solutions Architect | Anoop Gupta | Architecture, DB design, masking, AI (Groq) integration, deployment design (Vercel + Render + Supabase) |
 | Scrum Master | Devdarshan S | Sprint facilitation, impediment removal, Jira management |
 | Tech Lead | Rohan Vashisht | Implementation, code quality, CI/CD, delivery of D-5/D-9 |
 
@@ -154,7 +155,7 @@ The Client agrees to:
 
 1. **Sign off** BRD (§23), SRS, and SOW in a timely manner (within 3 working days of receipt) to avoid slippage.
 2. Provide **master data** during onboarding: products, suppliers, stores/warehouses, and initial stock counts.
-3. Provide **free-tier accounts / access**: Vercel (frontend) and Render (backend) — or authorize the team to create them.
+3. Provide **free-tier accounts / access**: Vercel (frontend), Render (backend), Supabase (Postgres/Auth/Storage), and Groq (API key) — or authorize the team to create them.
 4. Appoint a **single point of contact (SPOC)** for clarifications.
 5. Participate in **demo & UAT** and give timely feedback (within the sprint).
 6. Provide the **final go-live approval** at UAT acceptance.
@@ -166,7 +167,7 @@ The Client agrees to:
 
 ## 7. Acceptance & Approval Process
 
-1. **UAT:** Client tests against SRS v1.0 acceptance criteria (Section 13) using the live free-tier app.
+1. **UAT:** Client tests against SRS v1.1 acceptance criteria (Section 13) using the live free-tier app.
 2. **Defects:** any breach of an in-scope specification is fixed by the team at no cost.
 3. **Acceptance:** on meeting all AC-1…AC-14, client signs the **Acceptance Form** (included in UAT Report).
 4. **Deferred items:** any pending non-blocking items listed in the UAT report are accepted as known limitations or tracked as Change Requests.
@@ -211,14 +212,14 @@ The Client agrees to:
 1. Client provides master data, opening stock, and safety-stock starting values.
 2. **3 stores** scope; single currency; single language (English).
 3. Sales are entered manually into the app (no POS).
-4. Free-tier accounts on Vercel + Render are available (one project/service per account).
+4. Free-tier accounts on Vercel + Render + Supabase (and Groq API access) are available (one project/service per account).
 5. Internet connectivity for users.
 6. All users have modern browsers.
 
 ### 11.2 Dependencies
 - BRD/SRS sign-off.
 - Master data and initial stock counts from client.
-- Vercel/Render accounts.
+- Vercel/Render/Supabase accounts + Groq API access.
 - Timely UAT feedback.
 - Stable free-tier database service.
 
@@ -227,7 +228,7 @@ The Client agrees to:
 ## 12. Constraints & Assumptions
 
 1. **Timeline:** 3 sprints (fixed), 29 Aug – 30 Sep 2026, starts at BRD sign-off.
-2. **Technology:** React (frontend); Node.js or Python (backend); PostgreSQL; Vercel + Render free tier.
+2. **Technology:** React + Tailwind + shadcn/ui (frontend); Node.js (backend) + AI via Groq API; Supabase (PostgreSQL/Auth/Storage); Vercel + Render + Supabase free tier.
 3. **Team:** 5 members as defined in §5.
 4. **Scope:** strictly BRD §8 / SRS §4.
 5. **Data protection:** masking per BRD §14 / SRS §7.
@@ -292,4 +293,4 @@ By signing, the Client acknowledges and agrees to the scope, deliverables, timel
 
 ---
 
-*End of SOW — Version 1.1 · Project: Vaultory · Team: Vaultory*
+*End of SOW — Version 1.2 · Project: Vaultory · Team: Vaultory*
