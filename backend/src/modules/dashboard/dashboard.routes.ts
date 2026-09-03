@@ -1,6 +1,17 @@
 import { Router } from 'express'
 import { supabase } from '../../config/index.js'
-import { AppError, asyncHandler, requireAuth } from '../../middleware/index.js'
+import {
+  AppError,
+  asyncHandler,
+  requireAuth,
+  validate,
+  validated,
+} from '../../middleware/index.js'
+import {
+  RevenueTrendQuery,
+  TopProductsQuery,
+  StoreComparisonQuery,
+} from '../../lib/schemas/index.js'
 
 const router = Router()
 
@@ -136,11 +147,9 @@ router.get(
 router.get(
   '/dashboard/revenue-trend',
   requireAuth,
+  validate(RevenueTrendQuery, 'query'),
   asyncHandler(async (req, res) => {
-    const days = Math.min(
-      Math.max(Number(req.query.days) || 30, 1),
-      365,
-    )
+    const { days } = validated(req, 'query', RevenueTrendQuery)
 
     const start = new Date()
     start.setUTCHours(0, 0, 0, 0)
@@ -179,9 +188,9 @@ router.get(
 router.get(
   '/dashboard/top-products',
   requireAuth,
+  validate(TopProductsQuery, 'query'),
   asyncHandler(async (req, res) => {
-    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50)
-    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365)
+    const { limit, days } = validated(req, 'query', TopProductsQuery)
 
     const start = new Date()
     start.setUTCHours(0, 0, 0, 0)
@@ -238,7 +247,10 @@ router.get(
 router.get(
   '/dashboard/store-comparison',
   requireAuth,
+  validate(StoreComparisonQuery, 'query'),
   asyncHandler(async (req, res) => {
+    const { from, to } = validated(req, 'query', StoreComparisonQuery)
+
     // Load all stores.
     const { data: stores, error: storesErr } = await supabase
       .from('stores')
@@ -266,8 +278,6 @@ router.get(
           .eq('store_id', sid)
 
         // Optional period filter (from / to query params).
-        const from = req.query.from as string | undefined
-        const to = req.query.to as string | undefined
         if (from) q = q.gte('sale_datetime', from)
         if (to) q = q.lte('sale_datetime', to)
 

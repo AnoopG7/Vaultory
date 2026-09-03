@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import { z } from 'zod'
 import { supabase } from '../../config/index.js'
 import {
   AppError,
@@ -7,19 +6,12 @@ import {
   requireAuth,
   requireRoles,
   validate,
+  validated,
 } from '../../middleware/index.js'
 import type { Role } from '../../middleware/auth.js'
+import { OtpRequest, SignInRequest } from '../../lib/schemas/index.js'
 
 const router = Router()
-
-const signInSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-})
-
-const otpSchema = z.object({
-  email: z.string().email(),
-})
 
 /** Map a Supabase user into the Vaultory User shape. */
 function mapUser(user: {
@@ -46,9 +38,9 @@ function mapUser(user: {
  */
 router.post(
   '/auth/signin',
-  validate(signInSchema),
+  validate(SignInRequest),
   asyncHandler(async (req, res) => {
-    const { email, password } = req.body
+    const { email, password } = validated(req, 'body', SignInRequest)
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error || !data.session) {
@@ -69,9 +61,9 @@ router.post(
  */
 router.post(
   '/auth/otp',
-  validate(otpSchema),
+  validate(OtpRequest),
   asyncHandler(async (req, res) => {
-    const { email } = req.body
+    const { email } = validated(req, 'body', OtpRequest)
 
     const { error } = await supabase.auth.signInWithOtp({
       email,

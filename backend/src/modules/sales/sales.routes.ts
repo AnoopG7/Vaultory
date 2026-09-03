@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import { z } from 'zod'
 import { supabase } from '../../config/index.js'
 import {
   AppError,
@@ -7,7 +6,14 @@ import {
   asyncHandler,
   requireAuth,
   validate,
+  validated,
 } from '../../middleware/index.js'
+import {
+  CreateSaleRequest,
+  ListSalesQuery,
+  SaleIdParam,
+  VoidSaleRequest,
+} from '../../lib/schemas/index.js'
 
 const router = Router()
 
@@ -41,56 +47,20 @@ function assertCanWriteSale(role: string | undefined): void {
 }
 
 // ---------------------------------------------------------------------------
-// Validation schemas
-// ---------------------------------------------------------------------------
-
-const saleLineSchema = z.object({
-  product_id: z.string().uuid(),
-  qty: z.number().positive('Quantity must be greater than zero'),
-  unit_price: z.number().min(0, 'Unit price cannot be negative').nullable().optional(),
-})
-
-const createSaleSchema = z.object({
-  store_id: z.string().uuid(),
-  sale_datetime: z.string().datetime().optional(),
-  discount: z.number().min(0).default(0),
-  notes: z.string().max(2000).optional(),
-  lines: z
-    .array(saleLineSchema)
-    .min(1, 'A sale must have at least one line item')
-    .max(200, 'A sale cannot exceed 200 line items'),
-})
-
-const listQuerySchema = z.object({
-  store_id: z.string().uuid().optional(),
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
-  status: z.enum(['active', 'voided']).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-})
-
-const idParamSchema = z.object({
-  id: z.string().uuid(),
-})
-
-const voidSchema = z.object({
-  reason: z.string().min(1, 'Reason is required to void a sale'),
-})
-
-// ---------------------------------------------------------------------------
 // POST /api/sales — record a sale (auto stock deduction)
 // ---------------------------------------------------------------------------
 router.post(
   '/sales',
   requireAuth,
-  validate(createSaleSchema),
+  validate(CreateSaleRequest),
   asyncHandler(async (req, res) => {
     assertCanWriteSale(req.role)
 
-    const { store_id, sale_datetime, discount, notes, lines } = req.body as z.infer<
-      typeof createSaleSchema
-    >
+    const { store_id, sale_datetime, discount, notes, lines } = validated(
+      req,
+      'body',
+      CreateSaleRequest,
+    )
 
     // Resolve the physical store location (inventory is keyed by location).
     const locationId = await getStoreLocationId(store_id)
@@ -213,11 +183,13 @@ router.post(
 router.get(
   '/sales',
   requireAuth,
-  validate(listQuerySchema, 'query'),
+  validate(ListSalesQuery, 'query'),
   asyncHandler(async (req, res) => {
-    const { store_id, from, to, status, limit, offset } = req.query as unknown as z.infer<
-      typeof listQuerySchema
-    >
+    const { store_id, from, to, status, limit, offset } = validated(
+      req,
+      'query',
+      ListSalesQuery,
+    )
 
     // Store Staff are scoped to their own store (BRD §12: view own store).
     if (req.role === 'store_staff' && req.storeId && store_id && store_id !== req.storeId) {
@@ -252,9 +224,9 @@ router.get(
 router.get(
   '/sales/:id',
   requireAuth,
-  validate(idParamSchema, 'params'),
+  validate(SaleIdParam, 'params'),
   asyncHandler(async (req, res) => {
-    const { id } = req.params as unknown as z.infer<typeof idParamSchema>
+    const { id } = validated(req, 'params', SaleIdParam)
 
     const { data: sale, error: saleError } = await supabase
       .from('sales')
@@ -284,15 +256,15 @@ router.get(
 router.post(
   '/sales/:id/void',
   requireAuth,
-  validate(idParamSchema, 'params'),
-  validate(voidSchema),
+  validate(SaleIdParam, 'params'),
+  validate(VoidSaleRequest),
   asyncHandler(async (req, res) => {
     if (req.role !== 'admin') {
       throw new AppError(403, 'Only an admin can void a sale', 'FORBIDDEN')
     }
 
-    const { id } = req.params as unknown as z.infer<typeof idParamSchema>
-    const { reason } = req.body as z.infer<typeof voidSchema>
+    const { id } = validated(req, 'params', SaleIdParam)
+    const { reason } = validated(req, 'body', VoidSaleRequest)
 
     // Load the sale; must be active to void.
     const { data: sale, error: saleError } = await supabase

@@ -6,12 +6,19 @@ import { isProd } from '../config/env.js'
 export class AppError extends Error {
   statusCode: number
   code?: string
+  details?: Record<string, unknown>
 
-  constructor(statusCode: number, message: string, code?: string) {
+  constructor(
+    statusCode: number,
+    message: string,
+    code?: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message)
     this.name = 'AppError'
     this.statusCode = statusCode
     this.code = code
+    this.details = details
   }
 }
 
@@ -45,6 +52,7 @@ export function errorHandler(
       error: err.message,
       message: err.message,
       ...(err.code ? { code: err.code } : {}),
+      ...(err.details ? { details: err.details } : {}),
     })
     return
   }

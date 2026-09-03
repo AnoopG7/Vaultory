@@ -1,7 +1,13 @@
 import { Router } from 'express'
-import { z } from 'zod'
 import { supabase } from '../../config/index.js'
-import { AppError, asyncHandler, requireAuth, validate } from '../../middleware/index.js'
+import {
+  AppError,
+  asyncHandler,
+  requireAuth,
+  validate,
+  validated,
+} from '../../middleware/index.js'
+import { ProductDropdownQuery } from '../../lib/schemas/index.js'
 
 const router = Router()
 
@@ -34,17 +40,12 @@ router.get(
 // ---------------------------------------------------------------------------
 // GET /api/products — list active products (for sales line-item picker)
 // ---------------------------------------------------------------------------
-const productQuerySchema = z.object({
-  search: z.string().max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(200),
-})
-
 router.get(
   '/products',
   requireAuth,
-  validate(productQuerySchema, 'query'),
+  validate(ProductDropdownQuery, 'query'),
   asyncHandler(async (req, res) => {
-    const { search, limit } = req.query as unknown as z.infer<typeof productQuerySchema>
+    const { search, limit } = validated(req, 'query', ProductDropdownQuery)
 
     // cost_price is MASKED at the app layer — never returned to any role here.
     let query = supabase
