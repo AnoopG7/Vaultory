@@ -34,7 +34,7 @@ function mapUser(user: {
     name: ((user.user_metadata?.name as string | undefined) ??
       user.email?.split('@')[0] ??
       '') as string,
-    role: ((user.app_metadata?.role as Role | undefined) ?? 'staff') as Role,
+    role: ((user.app_metadata?.role as Role | undefined) ?? 'store_staff') as Role,
     store_id: ((user.app_metadata?.store_id as string | null | undefined) ?? null) as string | null,
   }
 }
@@ -106,15 +106,15 @@ router.get(
 )
 
 /**
- * GET /api/auth/me (owner-only example)
+ * GET /api/auth/me (admin-only example)
  * Demonstrates role enforcement via requireRoles after requireAuth.
  */
 router.get(
   '/auth/me/roles',
   requireAuth,
-  requireRoles('owner'),
+  requireRoles('admin'),
   asyncHandler(async (_req, res) => {
-    res.json({ message: 'Only owners can see this endpoint.' })
+    res.json({ message: 'Only admins can see this endpoint.' })
   }),
 )
 

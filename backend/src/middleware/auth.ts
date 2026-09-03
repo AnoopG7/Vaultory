@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { supabase } from '../config/index.js'
 import { AppError } from './error.js'
 
-export type Role = 'owner' | 'store_manager' | 'staff'
+export type Role = 'admin' | 'store_staff' | 'sales_personnel' | 'senior_stakeholder'
 
 /** Attached to req by requireAuth(). */
 declare module 'express' {
@@ -42,7 +42,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
   req.userId = user.id
   req.email = user.email
-  req.role = appMetadata.role ?? 'staff'
+  req.role = appMetadata.role ?? 'store_staff'
   req.storeId = storeId
 
   next()
