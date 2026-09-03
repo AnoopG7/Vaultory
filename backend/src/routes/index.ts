@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { authRoutes } from '../modules/auth/index.js'
 import { healthRoutes } from '../modules/health/index.js'
+import { salesRoutes } from '../modules/sales/index.js'
+import { dashboardRoutes } from '../modules/dashboard/index.js'
+import { referenceRoutes } from '../modules/reference/index.js'
 
 /**
  * Central API router (mounted at /api in app.ts).
@@ -18,5 +21,8 @@ const api = Router()
 
 api.use('/', authRoutes)
 api.use('/', healthRoutes)
+api.use('/', salesRoutes)
+api.use('/', dashboardRoutes)
+api.use('/', referenceRoutes)
 
 export default api
