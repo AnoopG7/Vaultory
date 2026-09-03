@@ -1,121 +1,56 @@
 import { Router } from 'express'
-import { z } from 'zod'
-import { supabase } from '../../config/index.js'
+import { requireAuth, asyncHandler, validate } from '../../middleware/index.js'
 import {
-  AppError,
-  asyncHandler,
-  requireAuth,
-  requireRoles,
-  validate,
-} from '../../middleware/index.js'
-import type { Role } from '../../middleware/auth.js'
+  signUpSchema,
+  signInSchema,
+  otpSchema,
+  verifyOtpSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from '../../lib/schemas/index.js'
+import {
+  handleSignup,
+  handleSignin,
+  handleOtp,
+  handleVerifyOtp,
+  handleForgotPassword,
+  handleResetPassword,
+  handleSignout,
+  handleMe,
+  handleRoles,
+} from './auth.controller.js'
 
 const router = Router()
 
-const signInSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-})
-
-const otpSchema = z.object({
-  email: z.string().email(),
-})
-
-/** Map a Supabase user into the Vaultory User shape. */
-function mapUser(user: {
-  id: string
-  email?: string | null
-  user_metadata?: Record<string, unknown> | null
-  app_metadata?: Record<string, unknown> | null
-}) {
-  return {
-    id: user.id,
-    email: user.email ?? '',
-    name: ((user.user_metadata?.name as string | undefined) ??
-      user.email?.split('@')[0] ??
-      '') as string,
-    role: ((user.app_metadata?.role as Role | undefined) ?? 'staff') as Role,
-    store_id: ((user.app_metadata?.store_id as string | null | undefined) ?? null) as string | null,
-  }
-}
-
 /**
- * POST /api/auth/signin
- * Email + password sign-in via Supabase Auth.
- * Public.
+ * POST /api/auth/signup
+ * ADMIN-GATED user provisioning: creates a Supabase Auth user + profiles row
+ * via the service-role client. Admin creates staff accounts (SRS §12).
  */
-router.post(
-  '/auth/signin',
-  validate(signInSchema),
-  asyncHandler(async (req, res) => {
-    const { email, password } = req.body
+router.post('/auth/signup', requireAuth, validate(signUpSchema), asyncHandler(handleSignup))
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error || !data.session) {
-      throw new AppError(401, 'Invalid email or password', 'INVALID_CREDENTIALS')
-    }
+/** POST /api/auth/signin — email + password. Public. */
+router.post('/auth/signin', validate(signInSchema), asyncHandler(handleSignin))
 
-    res.json({
-      user: mapUser(data.user),
-      token: data.session.access_token,
-    })
-  }),
-)
+/** POST /api/auth/otp — send email OTP / magic link. Public. */
+router.post('/auth/otp', validate(otpSchema), asyncHandler(handleOtp))
 
-/**
- * POST /api/auth/otp
- * Email OTP / magic-link sign-in (no password).
- * Public. Sends a one-time link to the given email.
- */
-router.post(
-  '/auth/otp',
-  validate(otpSchema),
-  asyncHandler(async (req, res) => {
-    const { email } = req.body
+/** POST /api/auth/verify-otp — verify a one-time code. */
+router.post('/auth/verify-otp', validate(verifyOtpSchema), asyncHandler(handleVerifyOtp))
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${req.headers.origin ?? ''}/auth` },
-    })
-    if (error) {
-      throw new AppError(400, error.message, 'OTP_SEND_FAILED')
-    }
+/** POST /api/auth/forgot-password — trigger reset email. Public. */
+router.post('/auth/forgot-password', validate(forgotPasswordSchema), asyncHandler(handleForgotPassword))
 
-    res.status(202).json({ message: 'If that email exists, a sign-in link has been sent.' })
-  }),
-)
+/** POST /api/auth/reset-password — set new password with recovery token. */
+router.post('/auth/reset-password', validate(resetPasswordSchema), asyncHandler(handleResetPassword))
 
-/**
- * GET /api/auth/me
- * Returns the authenticated user. Protected by Supabase JWT verification.
- */
-router.get(
-  '/auth/me',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    res.json({
-      user: {
-        id: req.userId,
-        email: req.email,
-        name: req.email?.split('@')[0] ?? '',
-        role: req.role,
-        store_id: req.storeId,
-      },
-    })
-  }),
-)
+/** POST /api/auth/signout — invalidate the session. */
+router.post('/auth/signout', requireAuth, asyncHandler(handleSignout))
 
-/**
- * GET /api/auth/me (owner-only example)
- * Demonstrates role enforcement via requireRoles after requireAuth.
- */
-router.get(
-  '/auth/me/roles',
-  requireAuth,
-  requireRoles('owner'),
-  asyncHandler(async (_req, res) => {
-    res.json({ message: 'Only owners can see this endpoint.' })
-  }),
-)
+/** GET /api/auth/me — authenticated user, enriched from profiles. */
+router.get('/auth/me', requireAuth, asyncHandler(handleMe))
+
+/** GET /api/auth/me/roles — role-gated example. */
+router.get('/auth/me/roles', requireAuth, asyncHandler(handleRoles))
 
 export default router
