@@ -21,7 +21,8 @@ export * from './audit.js'
 export * from './reports.js'
 export * from './users.js'
 
-// Rohan branch additions
-export * from './dashboard.js'
-export * from './reference.js'
-export * from './settings.js'
+// Rohan branch additions (feature-specific schemas, unique to this branch)
+export * from './sales.schema.js'
+export * from './dashboard.schema.js'
+export * from './reference.schema.js'
+export * from './settings.schema.js'

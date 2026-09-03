@@ -23,8 +23,23 @@ import {
   SidebarRail,
 } from '@/components/ui'
 import { cn } from '@/lib'
+import { useAuthStore } from '@/stores'
+import type { UserRole } from '@/lib'
 
-const nav = [
+type NavItem = {
+  to: string
+  label: string
+  icon: typeof BarChart3
+  end?: boolean
+  roles?: UserRole[]
+}
+
+type NavGroup = {
+  group: string
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
   {
     group: 'Operations',
     items: [
@@ -43,18 +58,30 @@ const nav = [
   {
     group: 'Manage',
     items: [
-      { to: '/stores', label: 'Stores', icon: StoreIcon },
-      { to: '/reports', label: 'Reports', icon: BarChart3 },
-      { to: '/settings', label: 'Settings', icon: Settings },
+      { to: '/stores', label: 'Stores', icon: StoreIcon, roles: ['admin'] },
+      { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'senior_stakeholder'] },
+      { to: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
     ],
   },
   {
     group: 'Dev',
-    items: [{ to: '/components', label: 'Components', icon: ComponentIcon }],
+    items: [{ to: '/components', label: 'Components', icon: ComponentIcon, roles: ['admin'] }],
   },
 ]
 
+function canSee(item: NavItem, role: UserRole | undefined): boolean {
+  if (!item.roles) return true
+  if (!role) return false
+  return item.roles.includes(role)
+}
+
 export function AppSidebar() {
+  const user = useAuthStore((s) => s.user)
+
+  const visibleGroups = navGroups
+    .map((group) => ({ ...group, items: group.items.filter((i) => canSee(i, user?.role)) }))
+    .filter((group) => group.items.length > 0)
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -69,7 +96,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {nav.map((group) => (
+        {visibleGroups.map((group) => (
           <SidebarGroup key={group.group}>
             <SidebarGroupLabel>{group.group}</SidebarGroupLabel>
             <SidebarGroupContent>

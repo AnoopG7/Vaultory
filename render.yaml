@@ -1,0 +1,50 @@
+# ============================================================================
+# VAULTORY — Render Blueprint (backend)
+# ============================================================================
+# Deploy the Express backend as a Render Web Service from the `backend/`
+# subdirectory of this monorepo.
+#
+# How to use (Render dashboard):
+#   1. New -> Blueprint -> connect the GitHub repo.
+#   2. Render picks up this render.yaml and creates the service.
+#   3. Set the `sync: false` env vars (SUPABASE_*, CLIENT_ORIGIN, GROQ_API_KEY)
+#      in the service's Environment dashboard — values are NOT stored here.
+#
+#   If the build fails with "TS2688: Cannot find type definition file for
+#   'node'" (stale cached node_modules), clear the cache once:
+#     Dashboard -> vaultory-backend -> Settings -> Build & Deploy ->
+#     "Clear build cache & deploy".
+#   From then on, `npm ci` performs a clean install each build, so this
+#   cannot recur.
+#
+# Docs: https://render.com/docs/blueprint-spec
+# ============================================================================
+services:
+  - type: web
+    name: vaultory-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects a real PORT; 4000 is only a local fallback.
+      - key: PORT
+        value: 4000
+      # Whichever Vercel frontend URL you deploy (set in service env).
+      - key: CLIENT_ORIGIN
+        sync: false
+      # Supabase (PostgreSQL + Auth). Set in the Render dashboard.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      # Optional: service-role key for privileged server operations (user mgmt).
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Optional: Groq LLM. Server runs without it (AI features degrade).
+      - key: GROQ_API_KEY
+        sync: false

@@ -9,6 +9,9 @@
 
 export type Role = 'admin' | 'store_staff' | 'sales_personnel' | 'senior_stakeholder'
 
+/** Alias to Role (camelCase), mirroring the backend user_role enum. */
+export type UserRole = Role
+
 export type EntityStatus = 'active' | 'archived'
 
 export type LocationType = 'store' | 'warehouse'
@@ -96,9 +99,14 @@ export interface AuthUser {
 export interface User {
   id: string
   email: string
-  name: string
-  role: Role
-  store_id: string | null
+  fullName: string
+  role: UserRole
+  storeId: string | null
+  gender: Gender | null
+  avatarUrl: string | null
+  // Back-compat aliases used by a few Rohan pages.
+  name?: string
+  store_id?: string | null
 }
 
 // ── Users ──────────────────────────────────────────────────────────────────

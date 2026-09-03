@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { SaleStatus } from './common.schema.js'
+
+const SaleStatus = z.enum(['active', 'voided'])
 
 // ---------------------------------------------------------------------------
 // Request schemas
