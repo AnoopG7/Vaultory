@@ -18,7 +18,7 @@
 | Version | Date | Author | Description of Change |
 |---|---|---|---|
 | 1.0 | 29/08/2026 | Laxman Patel (PM) | Initial SOW |
-| 1.1 | 29/08/2026 | Laxman Patel (PM) | Compressed timeline to 3 sprints (29 Aug – 30 Sep 2026) per Sprint Planner v2.0 |
+| 1.1 | 29/08/2026 | Laxman Patel (PM) | Compressed timeline to 3 sprints (29 Aug – 20 Sep 2026) per Sprint Planner v2.0 |
 | 1.2 | 29/08/2026 | Laxman Patel (PM) | Locked stack per BRD v3.4: React + Tailwind + shadcn/ui, Node.js backend + AI via Groq API, Supabase (PostgreSQL/Auth incl. email OTP/Storage) |
 
 ---
