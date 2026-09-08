@@ -211,7 +211,7 @@ The Client agrees to:
 
 ## 12. Constraints & Assumptions
 
-1. **Timeline:** 3 sprints (fixed), 29 Aug – 30 Sep 2026, starts at BRD sign-off.
+1. **Timeline:** 3 sprints (fixed), 29 Aug – 20 Sep 2026, starts at BRD sign-off.
 2. **Technology:** React + Tailwind + shadcn/ui (frontend); Node.js (backend) + AI via Groq API; Supabase (PostgreSQL/Auth/Storage); Vercel + Render + Supabase free tier.
 3. **Team:** 5 members as defined.
 4. **Scope:** strictly BRD / SRS.
