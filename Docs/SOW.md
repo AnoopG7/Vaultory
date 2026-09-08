@@ -93,20 +93,6 @@ The delivery team will:
 5. Deliver **demo** and **UAT** (User Acceptance Testing) sessions.
 6. Hand over **source code**, deployment access/instructions, and credentials to the client.
 
-### 2.2 Work Excluded (Not Part of This Engagement)
-- Any item in BRD §9 / SRS §3.2 (L-1…L-21): no native mobile apps, e-commerce, payments, POS/hardware, CRM, accounting/GST, supplier portal, ERP integration, multi-currency, etc.
-- **Phase-2 production hosting on GCP/AWS** — explicitly after handover, separate engagement/Change Request (BRD §8.5).
-- Guaranteed SLA / paid hosting during the project (free tier is best-effort; BRD §8.5 / NFR-4).
-- Data migration from any legacy system (manual entry by client).
-- External compliance certification (ISO/SOC2).
-
-### 2.3 Constraints
-- Delivery follows **Agile/Scrum** with time-boxed sprints (see Sprint Planner).
-- Fixed timeline and budget; changes require approved Change Requests (§10).
-- Free-tier limits: 1 Vercel project + 1 Render service (~750 hrs/mo) + Supabase (Postgres/Auth/Storage) + Groq API credits, per account.
-
----
-
 ## 3. Deliverables
 
 | # | Deliverable | Format | Due |
@@ -129,11 +115,11 @@ The delivery team will:
 
 | Phase | Sprint(s) | Dates | Key Deliverables / Exit Criteria |
 |---|---|---|---|
-| **Foundation, Planning & Design** | Sprint 1 | 29 Aug – 8 Sep | BRD+SRS+SOW+Plan sign-off; project & environment setup (Vercel/Render/Supabase/Groq); DB schema; API design; UI mockups; auth foundation (Supabase Auth incl. OTP) & core models |
-| **Core Build — Inventory, Sales & Procurement** | Sprint 2 | 9 Sep – 19 Sep | Products, stock-in/out/transfer/adjust, sales recording, daily/qtr/yr reports, RBAC, safety stock + alerts, suppliers, manual POs, PO lifecycle |
-| **AI, Monitoring, Test & Handover** | Sprint 3 | 20 Sep – 30 Sep | AI auto-ordering + warehouse recommendations, dashboards, value-adds, QA/UAT, bug fixes, user guide, demo, acceptance, handover (code + access) |
+| **Foundation, Planning & Design** | Sprint 1 | 29 Aug – 6 Sep | BRD+SRS+SOW+Plan sign-off; project & environment setup (Vercel/Render/Supabase/Groq); DB schema; API design; UI mockups; auth foundation (Supabase Auth incl. OTP) & core models |
+| **Core Build — Inventory, Sales & Procurement** | Sprint 2 | 7 Sep – 12 Sep | Products, stock-in/out/transfer/adjust, sales recording, daily/qtr/yr reports, RBAC, safety stock + alerts, suppliers, manual POs, PO lifecycle |
+| **AI, Monitoring, Test & Handover** | Sprint 3 | 14 Sep – 19 Sep | AI auto-ordering + warehouse recommendations, dashboards, value-adds, QA/UAT, bug fixes, user guide, demo, acceptance, handover (code + access) |
 
-**Delivery end-date:** **30 Sep 2026** (submission deadline) — subject to timely sign-offs (see §6).
+**Delivery end-date:** **20 Sep 2026** (submission deadline) — subject to timely sign-offs .
 
 ---
 
@@ -153,13 +139,13 @@ The delivery team will:
 
 The Client agrees to:
 
-1. **Sign off** BRD (§23), SRS, and SOW in a timely manner (within 3 working days of receipt) to avoid slippage.
+1. **Sign off** BRD , SRS, and SOW in a timely manner (within 3 working days of receipt) to avoid slippage.
 2. Provide **master data** during onboarding: products, suppliers, stores/warehouses, and initial stock counts.
 3. Provide **free-tier accounts / access**: Vercel (frontend), Render (backend), Supabase (Postgres/Auth/Storage), and Groq (API key) — or authorize the team to create them.
 4. Appoint a **single point of contact (SPOC)** for clarifications.
 5. Participate in **demo & UAT** and give timely feedback (within the sprint).
 6. Provide the **final go-live approval** at UAT acceptance.
-7. Not request out-of-scope work without an approved Change Request (§10).
+7. Not request out-of-scope work without an approved Change Request.
 
 **Effect of non-performance:** delays in client responsibilities extend the timeline pro-rata (no cost change).
 
@@ -190,7 +176,7 @@ The Client agrees to:
 - **Communication channels:** email / project chat; a shared Jira board tracks all work.
 - **Reports to client (weekly):** sprint progress, completed scope, open risks, next steps.
 - **Escalation:** SM (Devdarshan S) resolves impediments; PM (Laxman Patel) owns client communication.
-- **Change requests** are the only formal way to alter scope (§10).
+- **Change requests** are the only formal way to alter scope.
 
 ---
 
@@ -201,8 +187,6 @@ The Client agrees to:
 3. Present impact to the client; client **accepts or rejects** in writing.
 4. If accepted: schedule into a future sprint; update SOW/SRS via controlled document versions.
 5. **Defect vs Enhancement:** fixing an in-scope bug = free; any new behavior not specified in BRD/SRS = Change Request.
-
-> Forms and process follow the BRD §21 Change Management section.
 
 ---
 
@@ -229,15 +213,15 @@ The Client agrees to:
 
 1. **Timeline:** 3 sprints (fixed), 29 Aug – 30 Sep 2026, starts at BRD sign-off.
 2. **Technology:** React + Tailwind + shadcn/ui (frontend); Node.js (backend) + AI via Groq API; Supabase (PostgreSQL/Auth/Storage); Vercel + Render + Supabase free tier.
-3. **Team:** 5 members as defined in §5.
-4. **Scope:** strictly BRD §8 / SRS §4.
-5. **Data protection:** masking per BRD §14 / SRS §7.
+3. **Team:** 5 members as defined.
+4. **Scope:** strictly BRD / SRS.
+5. **Data protection:** masking per BRD / SRS.
 
 ---
 
 ## 13. Limitations & Exclusions (Out of Scope)
 
-Reproduced for clarity (full detail in BRD §9):
+Reproduced for clarity (full detail in BRD):
 1. Native mobile apps (iOS/Android).
 2. Customer-facing e-commerce / online store.
 3. Online payments / gateways.
@@ -270,7 +254,7 @@ Reproduced for clarity (full detail in BRD §9):
 | R-2 | Late client sign-offs / data | Medium | High | SPOC, agreed response times, early checklists |
 | R-3 | Free-tier outages/sleep | Medium | Medium | Communicated as best-effort; demo fallback plan; Phase-2 = CR |
 | R-4 | AI forecast accuracy | Medium | Medium | Explainable, advisory-only AI with fallbacks |
-| R-5 | Masking misconfiguration | Medium | High | SA review, mask tests (SRS §7.3) |
+| R-5 | Masking misconfiguration | Medium | High | SA review, mask tests (SRS)|
 | R-6 | Team capacity (5 members) | Medium | Medium | MoSCoW priorities; time-boxed sprints |
 | R-7 | Data loss | Low | High | Provider backups + scheduled exports |
 
