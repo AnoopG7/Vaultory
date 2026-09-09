@@ -23,8 +23,23 @@ import {
   SidebarRail,
 } from '@/components/ui'
 import { cn } from '@/lib'
+import { useAuthStore } from '@/stores'
+import type { UserRole } from '@/lib'
 
-const nav = [
+type NavItem = {
+  to: string
+  label: string
+  icon: typeof BarChart3
+  end?: boolean
+  roles?: UserRole[]
+}
+
+type NavGroup = {
+  group: string
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
   {
     group: 'Operations',
     items: [
@@ -43,33 +58,45 @@ const nav = [
   {
     group: 'Manage',
     items: [
-      { to: '/stores', label: 'Stores', icon: StoreIcon },
-      { to: '/reports', label: 'Reports', icon: BarChart3 },
-      { to: '/settings', label: 'Settings', icon: Settings },
+      { to: '/stores', label: 'Stores', icon: StoreIcon, roles: ['admin'] },
+      { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'senior_stakeholder'] },
+      { to: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
     ],
   },
   {
     group: 'Dev',
-    items: [{ to: '/components', label: 'Components', icon: ComponentIcon }],
+    items: [{ to: '/components', label: 'Components', icon: ComponentIcon, roles: ['admin'] }],
   },
 ]
 
+function canSee(item: NavItem, role: UserRole | undefined): boolean {
+  if (!item.roles) return true
+  if (!role) return false
+  return item.roles.includes(role)
+}
+
 export function AppSidebar() {
+  const user = useAuthStore((s) => s.user)
+
+  const visibleGroups = navGroups
+    .map((group) => ({ ...group, items: group.items.filter((i) => canSee(i, user?.role)) }))
+    .filter((group) => group.items.length > 0)
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-2">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+        <div className="flex items-center gap-2 px-2 py-2 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Sparkles className="size-4" />
           </div>
-          <div className="flex flex-col leading-none">
+          <div className="flex min-w-0 flex-col leading-none group-data-[collapsible=icon]:hidden">
             <span className="font-semibold">Vaultory</span>
             <span className="text-xs text-muted-foreground">Retail Ops</span>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {nav.map((group) => (
+        {visibleGroups.map((group) => (
           <SidebarGroup key={group.group}>
             <SidebarGroupLabel>{group.group}</SidebarGroupLabel>
             <SidebarGroupContent>

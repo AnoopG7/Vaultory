@@ -1,5 +1,7 @@
 import { Outlet } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { LogOut } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   Avatar,
   AvatarFallback,
@@ -19,7 +21,7 @@ import { AppSidebar } from "@/components/layout";
 import { ModeToggle } from "@/components/theme";
 import { useAuthStore } from "@/stores";
 
-export function AppLayout() {
+export function AppLayout({ children }: { children?: ReactNode }) {
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -33,7 +35,7 @@ export function AppLayout() {
           <UserMenu />
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </SidebarInset>
     </SidebarProvider>
@@ -43,21 +45,20 @@ export function AppLayout() {
 function UserMenu() {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const clearSession = useAuthStore((s) => s.clearSession);
+  const signOut = useAuthStore((s) => s.signOut);
 
   if (!isAuthenticated || !user) {
     return (
       <div className="flex items-center gap-2">
         <ModeToggle />
-        {/* Placeholder until the auth flow returns (Sprint 2). */}
-        <Button variant="outline" size="sm">
-          Sign in
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/login">Sign in</Link>
         </Button>
       </div>
     );
   }
 
-  const initials = user.name
+  const initials = user.fullName
     .split(" ")
     .map((p) => p[0])
     .slice(0, 2)
@@ -74,21 +75,21 @@ function UserMenu() {
               <AvatarFallback>{initials || "U"}</AvatarFallback>
             </Avatar>
             <span className="hidden text-sm font-medium sm:inline">
-              {user.name}
+              {user.fullName}
             </span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">{user.name}</span>
+              <span className="text-sm font-medium">{user.fullName}</span>
               <span className="text-xs font-normal text-muted-foreground">
                 {user.email}
               </span>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={clearSession} variant="destructive">
+          <DropdownMenuItem onClick={() => void signOut()} variant="destructive">
             <LogOut className="size-4" />
             Sign out
           </DropdownMenuItem>

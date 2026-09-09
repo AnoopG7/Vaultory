@@ -42,14 +42,28 @@ CREATE EXTENSION IF NOT EXISTS "citext";     -- case-insensitive text for SKUs/c
 -- 0a. AUTH SHIM (deployment-compatible)  [F6]
 -- ============================================================================
 -- `profiles.id` must reference `auth.users(id)` (Supabase Auth owns the
--- password). In a real Supabase project `auth.users` already exists, so the
--- guarded CREATE TABLE below is a no-op and never clobbers the real table.
--- In a bare/local Postgres (or CI) it creates a minimal shim purely so the
--- FK resolves and the rest of the schema can be loaded and validated.
-CREATE SCHEMA IF NOT EXISTS auth;
-CREATE TABLE IF NOT EXISTS auth.users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-);
+-- password). In a real Supabase project `auth.users` already exists and the
+-- `auth` schema is owned by Supabase (roles cannot write to it), so the shim
+-- below is a no-op there. In a bare/local Postgres (or CI) it creates a
+-- minimal shim purely so the FK resolves and the rest of the schema can be
+-- loaded and validated.
+--
+-- Implementation: `to_regclass('auth.users')` detects whether the table
+-- already exists. On Supabase it does, so nothing is created. If a role has
+-- no visibility/permission on `auth`, any attempt to create is swallowed by
+-- the EXCEPTION block rather than aborting the whole migration.
+DO $$
+BEGIN
+  IF to_regclass('auth.users') IS NULL THEN
+    CREATE SCHEMA IF NOT EXISTS auth;
+    CREATE TABLE auth.users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+    );
+  END IF;
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    NULL; -- Supabase-managed `auth` schema; table already exists — skip.
+END $$;
 
 
 -- ============================================================================
