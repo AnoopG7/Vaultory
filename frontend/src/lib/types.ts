@@ -562,6 +562,8 @@ export interface SupplierProductMapping {
   created_at: string
   product_name?: string
   sku_code?: string
+  category?: string
+  unit?: string
 }
 
 export interface SupplierProductsResponse {
@@ -570,11 +572,24 @@ export interface SupplierProductsResponse {
 
 export interface SupplierPerformance {
   supplier_id: string
+  supplier_name?: string
   total_pos: number
+  completed_pos?: number
   on_time_deliveries: number
+  late_deliveries?: number
   on_time_percentage: number
   avg_lead_time_days: number | null
   effective_lead_time_days: number | null
+  rating?: 'excellent' | 'good' | 'fair' | 'poor' | 'unrated'
+  recent_deliveries?: Array<{
+    po_id: string
+    po_number: string
+    order_date: string
+    expected_date: string
+    received_date: string | null
+    is_on_time: boolean
+    actual_lead_time_days: number | null
+  }>
 }
 
 // ── Safety Stock ───────────────────────────────────────────────────────────

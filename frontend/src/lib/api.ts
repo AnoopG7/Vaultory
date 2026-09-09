@@ -17,7 +17,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const normalizedPath = path.startsWith('/api')
+    ? path
+    : `/api${path.startsWith('/') ? '' : '/'}${path}`
+
+  const res = await fetch(`${API_BASE}${normalizedPath}`, { ...options, headers })
 
   if (!res.ok) {
     let message = res.statusText

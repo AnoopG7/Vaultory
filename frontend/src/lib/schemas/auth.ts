@@ -17,7 +17,7 @@ export const signUpSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters').max(72),
   fullName: z.string().trim().min(1, 'Full name is required').max(200),
   role: userRoleSchema.default('store_staff'),
-  storeId: z.uuid().nullable().optional(),
+  storeId: z.string().uuid().nullable().optional(),
   gender: genderSchema.optional(),
   phone: z.string().trim().max(20).optional(),
 })

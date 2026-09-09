@@ -13,7 +13,7 @@ export const createStoreSchema = z.object({
   state: z.string().trim().max(100).optional(),
   address: z.string().trim().optional(),
   phone: z.string().trim().max(20).optional(),
-  email: z.email().nullish(),
+  email: z.string().email().nullish(),
   status: entityStatusSchema.default('active'),
 })
 export type CreateStoreInput = z.infer<typeof createStoreSchema>

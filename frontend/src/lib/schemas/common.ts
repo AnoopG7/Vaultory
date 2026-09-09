@@ -6,7 +6,9 @@ import { z } from 'zod'
  * qty NUMERIC(12,3)) and the backend common schemas.
  */
 
-export const uuidSchema = z.uuid()
+export const uuidSchema = z
+  .string()
+  .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID')
 
 export const shortCodeSchema = z
   .string()
@@ -15,7 +17,7 @@ export const shortCodeSchema = z
   .max(30)
   .transform((v) => v.toUpperCase())
 
-export const emailSchema = z.email()
+export const emailSchema = z.string().email()
 
 export const moneySchema = z.coerce.number().max(999999999999.99)
 export const nonNegativeMoneySchema = z.coerce.number().min(0).max(999999999999.99)

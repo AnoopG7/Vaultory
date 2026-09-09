@@ -5,8 +5,10 @@ import { z } from 'zod'
  * Derived from the DB column types in `backend/src/db/schema.sql`.
  */
 
-// UUID primary key / foreign key (gen_random_uuid())
-export const uuidSchema = z.string().uuid()
+// UUID primary key / foreign key (gen_random_uuid() or deterministic seed UUIDs)
+export const uuidSchema = z
+  .string()
+  .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID')
 
 // IdParam: /api/…/:id
 export const idParamSchema = z.object({

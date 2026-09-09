@@ -23,4 +23,11 @@ export const queryKeys = {
     all: ['products'] as const,
     list: (search?: string) => [...queryKeys.products.all, 'list', search ?? ''] as const,
   },
+  suppliers: {
+    all: ['suppliers'] as const,
+    list: (params?: unknown) => [...queryKeys.suppliers.all, 'list', params] as const,
+    detail: (id: string) => [...queryKeys.suppliers.all, 'detail', id] as const,
+    products: (id: string) => [...queryKeys.suppliers.all, 'products', id] as const,
+    performance: (id: string) => [...queryKeys.suppliers.all, 'performance', id] as const,
+  },
 }

@@ -1,6 +1,15 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from '@/components/layout'
 import ComponentsDemoPage from '@/pages/components-demo'
+import DashboardPage from '@/pages/dashboard'
+import SalesPage from '@/pages/sales'
+import SuppliersPage from '@/pages/suppliers'
+import InventoryPage from '@/pages/inventory'
+import AutoOrderPage from '@/pages/auto-order'
+import PurchaseOrdersPage from '@/pages/purchase-orders'
+import StoresPage from '@/pages/stores'
+import ReportsPage from '@/pages/reports'
+import SettingsPage from '@/pages/settings'
 import NotFoundPage from '@/pages/not-found'
 import AccessDeniedPage from '@/pages/access-denied'
 import LoginPage from '@/pages/login'
@@ -9,26 +18,22 @@ import ResetPasswordPage from '@/pages/reset-password'
 
 /**
  * Routing structure (react-router v7 data router)
- *
- * Public (no login required, but wrapped in the app shell for navigation):
- *   /                  -> component showcase (homepage) with navbar + taskbar
- *   /login             -> sign-in
- *   /forgot-password   -> password reset request
- *   /reset-password    -> set a new password
- *   /403               -> access denied
- *
- * The login-protected app pages (dashboard, inventory, sales, etc.) are
- * temporarily removed — "showcase first". Re-added via <AppLayout> inside
- * <RequireAuth> once the auth flow is fully wired.
  */
 export const router = createBrowserRouter([
   {
-    path: '/',
-    element: (
-      <AppLayout>
-        <ComponentsDemoPage />
-      </AppLayout>
-    ),
+    element: <AppLayout />,
+    children: [
+      { path: '/', element: <DashboardPage /> },
+      { path: '/sales', element: <SalesPage /> },
+      { path: '/suppliers', element: <SuppliersPage /> },
+      { path: '/inventory', element: <InventoryPage /> },
+      { path: '/auto-order', element: <AutoOrderPage /> },
+      { path: '/purchase-orders', element: <PurchaseOrdersPage /> },
+      { path: '/stores', element: <StoresPage /> },
+      { path: '/reports', element: <ReportsPage /> },
+      { path: '/settings', element: <SettingsPage /> },
+      { path: '/components', element: <ComponentsDemoPage /> },
+    ],
   },
   {
     path: '/login',

@@ -17,6 +17,8 @@ export const createSupplierSchema = z.object({
   address: z.string().trim().optional(),
   city: z.string().trim().max(100).optional(),
   lead_time_days: z.coerce.number().int().positive().default(7),
+  payment_terms: z.string().trim().max(100).optional(),
+  credit_limit: nonNegativeMoneySchema.nullish(),
   notes: z.string().trim().optional(),
   status: entityStatusSchema.default('active'),
 })
