@@ -29,6 +29,7 @@ export type Gender = z.infer<typeof genderSchema>
 
 // Stock status badges (SRS §4.1.3) — computed at query time
 export const stockStatusSchema = z.enum(['out_of_stock', 'low', 'in_stock', 'over_stock'])
+export type StockStatus = z.infer<typeof stockStatusSchema>
 
 // Stock movement types (SRS §4.1.3)
 export const movementTypeSchema = z.enum([
@@ -73,9 +74,11 @@ export const alertTypeSchema = z.enum([
   'expiry_warning',
   'system',
 ])
+export type AlertType = z.infer<typeof alertTypeSchema>
 
 // Alert priority
 export const alertPrioritySchema = z.enum(['low', 'medium', 'high', 'critical'])
+export type AlertPriority = z.infer<typeof alertPrioritySchema>
 
 // AI recommendation types (SRS §8)
 export const aiRecommendationTypeSchema = z.enum([

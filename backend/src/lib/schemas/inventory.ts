@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { nonNegativeQtySchema, positiveQtySchema, textSchema, uuidSchema } from './common.js'
+import { stockStatusSchema } from './enums.js'
 
 /**
  * Inventory & stock module schemas. Maps to `inventory`, `stock_movements`,
@@ -71,3 +72,25 @@ export const inventoryRowSchema = z.object({
   last_movement_at: z.string().nullable(),
 })
 export type InventoryRow = z.infer<typeof inventoryRowSchema>
+
+// PATCH /inventory/:productId/thresholds or PUT /safety-stock/:productId/:locationId
+export const updateInventoryThresholdsSchema = z.object({
+  locationId: uuidSchema.nullish(),
+  safetyStock: nonNegativeQtySchema,
+  reorderPoint: nonNegativeQtySchema,
+  targetLevel: nonNegativeQtySchema.optional(),
+})
+export type UpdateInventoryThresholdsInput = z.infer<typeof updateInventoryThresholdsSchema>
+
+// GET /inventory query params
+export const listInventoryQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  locationId: uuidSchema.optional(),
+  storeId: uuidSchema.optional(),
+  status: stockStatusSchema.optional(),
+  categoryId: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+export type ListInventoryQuery = z.infer<typeof listInventoryQuerySchema>
+
