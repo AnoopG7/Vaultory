@@ -5,6 +5,7 @@ import { salesRoutes } from '../modules/sales/index.js'
 import { dashboardRoutes } from '../modules/dashboard/index.js'
 import { referenceRoutes } from '../modules/reference/index.js'
 import { suppliersRoutes } from '../modules/suppliers/index.js'
+import { purchaseOrdersRoutes } from '../modules/purchase-orders/index.js'
 
 /**
  * Central API router (mounted at /api in app.ts).
@@ -26,5 +27,7 @@ api.use('/', salesRoutes)
 api.use('/', dashboardRoutes)
 api.use('/', referenceRoutes)
 api.use('/', suppliersRoutes)
+api.use('/', purchaseOrdersRoutes)
 
 export default api
+

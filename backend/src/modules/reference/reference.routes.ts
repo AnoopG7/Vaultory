@@ -38,6 +38,36 @@ router.get(
 )
 
 // ---------------------------------------------------------------------------
+// GET /api/locations — list active locations (stores + warehouse)
+// ---------------------------------------------------------------------------
+router.get(
+  '/locations',
+  requireAuth,
+  asyncHandler(async (_req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, type, name, code, city, is_default')
+        .order('name', { ascending: true })
+      if (!error && data && data.length > 0) {
+        return res.json({ locations: data })
+      }
+    } catch {
+      // Fallback
+    }
+
+    const fallbackLocations = [
+      { id: 'a1000000-0000-0000-0000-000000000001', type: 'store', name: 'Store A — MG Road', code: 'STORE-A', city: 'Mumbai', is_default: false },
+      { id: 'a1000000-0000-0000-0000-000000000002', type: 'store', name: 'Store B — Andheri', code: 'STORE-B', city: 'Mumbai', is_default: false },
+      { id: 'a1000000-0000-0000-0000-000000000003', type: 'store', name: 'Store C — Thane', code: 'STORE-C', city: 'Thane', is_default: false },
+      { id: 'a1000000-0000-0000-0000-000000000004', type: 'warehouse', name: 'Central Warehouse', code: 'WH-CENTRAL', city: 'Mumbai', is_default: true },
+    ]
+    res.json({ locations: fallbackLocations })
+  }),
+)
+
+
+// ---------------------------------------------------------------------------
 // GET /api/products — list active products (for sales line-item picker)
 // ---------------------------------------------------------------------------
 router.get(

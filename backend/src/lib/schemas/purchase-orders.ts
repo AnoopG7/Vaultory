@@ -7,29 +7,112 @@ import { poSourceSchema, poStatusSchema } from './enums.js'
  * `po_receipts`, `po_receipt_lines` in schema.sql.
  */
 
-// A PO line item.
+// A PO line item (supports both camelCase and snake_case inputs).
 export const poLineItemSchema = z.object({
-  productId: uuidSchema,
-  qtyOrdered: positiveQtySchema,
-  unitCost: nonNegativeMoneySchema.optional(), // MASKED field; defaults to supplier unit_cost
-})
+  productId: uuidSchema.optional(),
+  product_id: uuidSchema.optional(),
+  qtyOrdered: positiveQtySchema.optional(),
+  qty_ordered: positiveQtySchema.optional(),
+  unitCost: nonNegativeMoneySchema.optional(),
+  unit_cost: nonNegativeMoneySchema.optional(),
+}).refine(
+  (data) => Boolean(data.productId || data.product_id),
+  { message: 'productId (or product_id) is required' },
+).refine(
+  (data) => (data.qtyOrdered !== undefined && data.qtyOrdered > 0) || (data.qty_ordered !== undefined && data.qty_ordered > 0),
+  { message: 'qtyOrdered (or qty_ordered) must be > 0' },
+)
 export type PoLineItem = z.infer<typeof poLineItemSchema>
 
 // POST /purchase-orders — manual PO.
 export const createPurchaseOrderSchema = z.object({
-  supplierId: uuidSchema,
-  destinationId: uuidSchema,
+  supplierId: uuidSchema.optional(),
+  supplier_id: uuidSchema.optional(),
+  destinationId: uuidSchema.optional(),
+  destination_id: uuidSchema.optional(),
   lines: z.array(poLineItemSchema).min(1, 'At least one line is required'),
   source: poSourceSchema.default('manual'),
-  notes: textSchema.optional(),
-})
+  expectedDate: z.string().optional().nullable(),
+  expected_date: z.string().optional().nullable(),
+  notes: textSchema.optional().nullable(),
+  allowDuplicate: z.boolean().optional().default(false),
+  allow_duplicate: z.boolean().optional().default(false),
+}).refine(
+  (data) => Boolean(data.supplierId || data.supplier_id),
+  { message: 'supplierId (or supplier_id) is required' },
+).refine(
+  (data) => Boolean(data.destinationId || data.destination_id),
+  { message: 'destinationId (or destination_id) is required' },
+)
 export type CreatePurchaseOrderInput = z.infer<typeof createPurchaseOrderSchema>
+
+// Lifecycle status transition schema (accepts 'partial' as alias for 'partially_received')
+export const poTransitionStatusSchema = z.enum([
+  'draft',
+  'sent',
+  'partial',
+  'partially_received',
+  'received',
+  'closed',
+  'cancelled',
+])
 
 // PATCH /purchase-orders/:id/status — lifecycle transition.
 export const updatePoStatusSchema = z.object({
-  status: poStatusSchema,
+  status: poTransitionStatusSchema,
+  cancelReason: z.string().optional().nullable(),
+  cancel_reason: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
 })
 export type UpdatePoStatusInput = z.infer<typeof updatePoStatusSchema>
+
+// Goods-in line item
+export const receiveLineItemSchema = z.object({
+  poLineId: uuidSchema.optional(),
+  po_line_id: uuidSchema.optional(),
+  productId: uuidSchema.optional(),
+  product_id: uuidSchema.optional(),
+  qtyReceived: positiveQtySchema.optional(),
+  qty_received: positiveQtySchema.optional(),
+  earliestExpiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  earliest_expiry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+}).refine(
+  (data) => (data.qtyReceived !== undefined && data.qtyReceived > 0) || (data.qty_received !== undefined && data.qty_received > 0),
+  { message: 'qtyReceived must be > 0' },
+)
+export type ReceiveLineItemInput = z.infer<typeof receiveLineItemSchema>
+
+// POST /purchase-orders/:id/receive — goods-in processing
+export const receivePurchaseOrderSchema = z.object({
+  notes: textSchema.optional().nullable(),
+  receivedBy: uuidSchema.optional().nullable(),
+  lines: z.array(receiveLineItemSchema).min(1, 'At least one line item must be received'),
+})
+export type ReceivePurchaseOrderInput = z.infer<typeof receivePurchaseOrderSchema>
+
+// POST /purchase-orders/auto-trigger — automatic PO triggering based on inventory reorder conditions
+export const autoTriggerReorderSchema = z.object({
+  destinationId: uuidSchema.optional(),
+  destination_id: uuidSchema.optional(),
+  locationId: uuidSchema.optional(),
+  location_id: uuidSchema.optional(),
+  dryRun: z.boolean().optional().default(false),
+})
+export type AutoTriggerReorderInput = z.infer<typeof autoTriggerReorderSchema>
+
+// GET /purchase-orders query params
+export const listPurchaseOrdersQuerySchema = z.object({
+  status: z.string().optional(),
+  supplierId: uuidSchema.optional(),
+  supplier_id: uuidSchema.optional(),
+  destinationId: uuidSchema.optional(),
+  destination_id: uuidSchema.optional(),
+  source: z.string().optional(),
+  search: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+})
+export type ListPurchaseOrdersQuery = z.infer<typeof listPurchaseOrdersQuerySchema>
 
 // PO reorder quantity body (AI/manual) per line.
 export const poQuantitySchema = positiveQtySchema
@@ -69,3 +152,4 @@ export const poLineSchema = z.object({
 export type PoLine = z.infer<typeof poLineSchema>
 
 export const poIdParamSchema = idParamSchema
+

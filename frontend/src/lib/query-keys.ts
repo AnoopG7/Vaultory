@@ -30,4 +30,11 @@ export const queryKeys = {
     products: (id: string) => [...queryKeys.suppliers.all, 'products', id] as const,
     performance: (id: string) => [...queryKeys.suppliers.all, 'performance', id] as const,
   },
+  purchaseOrders: {
+    all: ['purchaseOrders'] as const,
+    list: (params?: unknown) => [...queryKeys.purchaseOrders.all, 'list', params] as const,
+    detail: (id: string) => [...queryKeys.purchaseOrders.all, 'detail', id] as const,
+    receipts: (id: string) => [...queryKeys.purchaseOrders.all, 'receipts', id] as const,
+  },
 }
+

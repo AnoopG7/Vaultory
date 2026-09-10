@@ -10,6 +10,23 @@ export function useStores() {
   })
 }
 
+export function useLocations() {
+  return useQuery({
+    queryKey: ['locations'] as const,
+    queryFn: () =>
+      api.get<{
+        locations: Array<{
+          id: string
+          type: 'store' | 'warehouse'
+          name: string
+          code: string
+          city: string
+          is_default: boolean
+        }>
+      }>('/locations'),
+  })
+}
+
 export function useProducts(search?: string) {
   return useQuery({
     queryKey: queryKeys.products.list(search),
@@ -19,3 +36,4 @@ export function useProducts(search?: string) {
       ),
   })
 }
+
