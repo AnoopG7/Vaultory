@@ -27,6 +27,7 @@ import {
   useUpdatePoStatus,
   useReceivePurchaseOrder,
   useAutoTriggerReorder,
+  type AutoTriggerResponse,
 } from '@/hooks/use-purchase-orders'
 import { useSuppliers } from '@/hooks/use-suppliers'
 import { useLocations, useProducts } from '@/hooks/use-reference'
@@ -93,7 +94,7 @@ export default function PurchaseOrdersPage() {
 
   // Auto-Trigger scan state
   const [autoTriggerLocation, setAutoTriggerLocation] = useState<string>('all')
-  const [autoScanResult, setAutoScanResult] = useState<any | null>(null)
+  const [autoScanResult, setAutoScanResult] = useState<AutoTriggerResponse | null>(null)
 
   // Fetch POs
   const { data: poData, isLoading, refetch } = usePurchaseOrders({
@@ -218,8 +219,8 @@ export default function PurchaseOrdersPage() {
       setNewNotes('')
       setAllowDuplicate(false)
       setNewLines([{ productId: '', qtyOrdered: 10, unitCost: 100 }])
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create purchase order')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create purchase order')
     }
   }
 
@@ -233,8 +234,8 @@ export default function PurchaseOrdersPage() {
         status: 'sent',
       })
       toast.success(`Purchase order ${po.po_number} marked as SENT`)
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update status')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update status')
     }
   }
 
@@ -248,8 +249,8 @@ export default function PurchaseOrdersPage() {
       if (detailDialogOpen && selectedPo?.id === po.id) {
         setSelectedPo((prev) => (prev ? { ...prev, status: 'closed' } : null))
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to close purchase order')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to close purchase order')
     }
   }
 
@@ -277,8 +278,8 @@ export default function PurchaseOrdersPage() {
       if (detailDialogOpen) {
         setSelectedPo((prev) => (prev ? { ...prev, status: 'cancelled' } : null))
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to cancel purchase order')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel purchase order')
     }
   }
 
@@ -355,8 +356,8 @@ export default function PurchaseOrdersPage() {
       if (detailDialogOpen && selectedPo.id === res.purchase_order.id) {
         setSelectedPo(res.purchase_order)
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to process goods-in receipt')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to process goods-in receipt')
     }
   }
 
@@ -373,7 +374,7 @@ export default function PurchaseOrdersPage() {
         dryRun: true,
       })
       setAutoScanResult(res)
-    } catch (err: any) {
+    } catch {
       toast.error('Failed to scan reorder levels')
     }
   }
@@ -384,11 +385,11 @@ export default function PurchaseOrdersPage() {
         destinationId: autoTriggerLocation === 'all' ? undefined : autoTriggerLocation,
         dryRun: false,
       })
-      toast.success(res.message)
+      toast.success(res.message || 'Auto-orders generated successfully')
       setAutoTriggerDialogOpen(false)
       refetch()
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to generate auto-orders')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate auto-orders')
     }
   }
 
@@ -1049,7 +1050,7 @@ export default function PurchaseOrdersPage() {
                       <ShieldAlert className="h-4 w-4" /> Duplicate Protection Active
                     </div>
                     <div className="space-y-1 text-[11px] text-zinc-300 max-h-32 overflow-y-auto">
-                      {autoScanResult.skipped_duplicates.map((dup: any, idx: number) => (
+                      {autoScanResult.skipped_duplicates.map((dup, idx) => (
                         <div key={idx} className="flex justify-between py-1 border-b border-zinc-800/50">
                           <span>{dup.product_name} ({dup.location_name})</span>
                           <span className="text-amber-400 font-mono">Covered by {dup.open_po_number} ({dup.open_status})</span>

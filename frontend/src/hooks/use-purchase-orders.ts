@@ -28,10 +28,12 @@ export interface PurchaseOrderListResponse {
 }
 
 export interface AutoTriggerResponse {
-  message: string
+  message?: string
+  dry_run?: boolean
   scanned_items_count: number
-  created_pos: PurchaseOrderWithRelations[]
-  total_pos_created: number
+  potential_pos_count?: number
+  created_pos?: PurchaseOrderWithRelations[]
+  total_pos_created?: number
   skipped_duplicates: Array<{
     product_id: string
     product_name: string
