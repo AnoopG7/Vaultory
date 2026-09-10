@@ -3,6 +3,7 @@ import { authRoutes } from '../modules/auth/index.js'
 import { healthRoutes } from '../modules/health/index.js'
 import { salesRoutes } from '../modules/sales/index.js'
 import { dashboardRoutes } from '../modules/dashboard/index.js'
+import { productsRoutes } from '../modules/products/index.js'
 import { referenceRoutes } from '../modules/reference/index.js'
 import { suppliersRoutes } from '../modules/suppliers/index.js'
 import { purchaseOrdersRoutes } from '../modules/purchase-orders/index.js'
@@ -11,6 +12,8 @@ import { inventoryRoutes } from '../modules/inventory/index.js'
 import { alertsRoutes } from '../modules/alerts/index.js'
 import { auditRoutes } from '../modules/audit/index.js'
 import { reportsRoutes } from '../modules/reports/index.js'
+import { categoriesRoutes } from '../modules/categories/index.js'
+import { unitsRoutes } from '../modules/units/index.js'
 
 /**
  * Central API router (mounted at /api in app.ts).
@@ -30,6 +33,10 @@ api.use('/', authRoutes)
 api.use('/', healthRoutes)
 api.use('/', salesRoutes)
 api.use('/', dashboardRoutes)
+// Products module owns GET /api/products (list + CRUD, VAU-018). Mounted
+// before referenceRoutes so the legacy dropdown route is superseded; its
+// shape stays compatible (id, sku_code, name, sale_price, status).
+api.use('/', productsRoutes)
 api.use('/', referenceRoutes)
 api.use('/', suppliersRoutes)
 api.use('/', purchaseOrdersRoutes)
@@ -38,6 +45,9 @@ api.use('/', inventoryRoutes)
 api.use('/', alertsRoutes)
 api.use('/', auditRoutes)
 api.use('/', reportsRoutes)
+api.use('/', productsRoutes)
+api.use('/', categoriesRoutes)
+api.use('/', unitsRoutes)
 
 export default api
 

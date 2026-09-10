@@ -4,6 +4,7 @@ import ComponentsDemoPage from '@/pages/components-demo'
 import DashboardPage from '@/pages/dashboard'
 import SalesPage from '@/pages/sales'
 import SuppliersPage from '@/pages/suppliers'
+import ProductsPage from '@/pages/products'
 import InventoryPage from '@/pages/inventory'
 import AutoOrderPage from '@/pages/auto-order'
 import PurchaseOrdersPage from '@/pages/purchase-orders'
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <DashboardPage /> },
       { path: '/sales', element: <SalesPage /> },
       { path: '/suppliers', element: <SuppliersPage /> },
+      { path: '/products', element: <ProductsPage /> },
       { path: '/inventory', element: <InventoryPage /> },
       { path: '/auto-order', element: <AutoOrderPage /> },
       { path: '/purchase-orders', element: <PurchaseOrdersPage /> },
