@@ -7,4 +7,7 @@ export * from './use-reference'
 export * from './use-suppliers'
 export * from './use-purchase-orders'
 export * from './use-users'
+export * from './use-inventory'
+export * from './use-alerts'
+
 

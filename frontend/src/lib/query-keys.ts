@@ -43,6 +43,18 @@ export const queryKeys = {
     details: () => [...queryKeys.users.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.users.details(), id] as const,
   },
+  inventory: {
+    all: ['inventory'] as const,
+    list: (params?: unknown) => [...queryKeys.inventory.all, 'list', params] as const,
+    detail: (productId: string, locationId?: string) =>
+      [...queryKeys.inventory.all, 'detail', productId, locationId ?? 'global'] as const,
+  },
+  alerts: {
+    all: ['alerts'] as const,
+    list: (params?: unknown) => [...queryKeys.alerts.all, 'list', params] as const,
+    unreadCount: () => [...queryKeys.alerts.all, 'unread-count'] as const,
+    preferences: () => [...queryKeys.alerts.all, 'preferences'] as const,
+  },
 }
 
 

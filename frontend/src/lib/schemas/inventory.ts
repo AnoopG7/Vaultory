@@ -65,3 +65,12 @@ export const inventoryRowSchema = z.object({
   last_movement_at: z.string().nullable(),
 })
 export type InventoryRow = z.infer<typeof inventoryRowSchema>
+
+export const updateInventoryThresholdsSchema = z.object({
+  locationId: uuidSchema.nullish(),
+  safetyStock: nonNegativeQtySchema,
+  reorderPoint: nonNegativeQtySchema,
+  targetLevel: nonNegativeQtySchema.optional(),
+})
+export type UpdateInventoryThresholdsInput = z.infer<typeof updateInventoryThresholdsSchema>
+
