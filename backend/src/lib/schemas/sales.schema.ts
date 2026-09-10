@@ -60,6 +60,14 @@ export const ReturnSaleRequest = z.object({
 })
 export type ReturnSaleRequest = z.infer<typeof ReturnSaleRequest>
 
+export const ListReturnsQuery = z.object({
+  sale_id: z.string().uuid().optional(),
+  store_id: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+export type ListReturnsQuery = z.infer<typeof ListReturnsQuery>
+
 // ---------------------------------------------------------------------------
 // Response schemas
 // ---------------------------------------------------------------------------
