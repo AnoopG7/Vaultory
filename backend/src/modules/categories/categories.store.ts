@@ -28,6 +28,26 @@ export const memoryCategories: LocalCategory[] = [
   { id: 'c2000000-0000-0000-0000-000000000007', name: 'Tea & Coffee',       parent_id: 'c1000000-0000-0000-0000-000000000003', sort_order: 3, status: 'active', created_at: '2026-08-29T10:00:00.000Z', updated_at: '2026-08-29T10:00:00.000Z' },
 ]
 
+/**
+ * Collect a category id and all of its descendants (any depth), or null when
+ * the category does not exist. Used so a parent-category filter also matches
+ * products living in sub-categories (broader selection = broader results).
+ */
+export function findDescendantCategoryIds(categoryId: string): Set<string> | null {
+  if (!memoryCategories.some((c) => c.id === categoryId)) return null
+  const ids = new Set<string>()
+  const stack = [categoryId]
+  while (stack.length > 0) {
+    const id = stack.pop()!
+    if (ids.has(id)) continue
+    ids.add(id)
+    for (const c of memoryCategories) {
+      if (c.parent_id === id && !ids.has(c.id)) stack.push(c.id)
+    }
+  }
+  return ids
+}
+
 /** Find a category's top-level ancestor (used for SKU prefix derivation). */
 export function findTopLevelCategory(categoryId: string): LocalCategory | null {
   let current = memoryCategories.find((c) => c.id === categoryId) ?? null

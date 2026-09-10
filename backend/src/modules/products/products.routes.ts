@@ -12,7 +12,7 @@ import {
   type UpdateProductInput,
   type ListProductsQuery,
 } from '../../lib/schemas/index.js'
-import { memoryCategories } from '../categories/index.js'
+import { memoryCategories, findDescendantCategoryIds } from '../categories/index.js'
 import { memoryUnits } from '../units/index.js'
 import {
   memoryProducts,
@@ -146,6 +146,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const { search, categoryId, status, limit, offset } = validated(req, 'query', listProductsQuerySchema) as ListProductsQuery
 
+    // A category filter matches the category AND all of its sub-categories
+    // (any depth), so a broad parent selection returns everything beneath it.
+    const categoryIds = categoryId ? findDescendantCategoryIds(categoryId) : null
+
     if (!isMockSupabase) {
       try {
         let query = supabase
@@ -159,7 +163,7 @@ router.get(
         } else {
           query = query.neq('status', 'archived')
         }
-        if (categoryId) query = query.eq('category_id', categoryId)
+        if (categoryIds) query = query.in('category_id', [...categoryIds])
         if (search) {
           query = query.or(`name.ilike.%${search}%,sku_code.ilike.%${search}%`)
         }
@@ -184,7 +188,7 @@ router.get(
     } else {
       filtered = filtered.filter((p) => p.status !== 'archived')
     }
-    if (categoryId) filtered = filtered.filter((p) => p.category_id === categoryId)
+    if (categoryIds) filtered = filtered.filter((p) => categoryIds.has(p.category_id))
     if (search) {
       const q = search.toLowerCase()
       filtered = filtered.filter(

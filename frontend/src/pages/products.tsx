@@ -12,6 +12,7 @@ import {
   Layers,
   ChevronRight,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -158,6 +159,16 @@ export default function ProductsPage() {
   const { data: categoriesData } = useCategories({ status: 'all' })
   const { data: unitsData } = useUnits({ status: 'all' })
   const archiveMutation = useArchiveProduct()
+  const updateUnitMutation = useUpdateUnit()
+
+  const handleReactivateUnit = async (u: Unit) => {
+    try {
+      await updateUnitMutation.mutateAsync({ id: u.id, status: 'active' })
+      toast.success(`${u.name} reactivated`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reactivate unit')
+    }
+  }
 
   const products = useMemo<ProductRow[]>(() => productsData?.products ?? [], [productsData])
   const categories = useMemo(() => categoriesData?.categories ?? [], [categoriesData])
@@ -554,16 +565,29 @@ export default function ProductsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            {isAdmin && u.status === 'active' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                title="Edit Unit"
-                                onClick={() => setEditingUnit(u)}
-                                className="size-8 p-0"
-                              >
-                                <Edit2 className="size-4 text-muted-foreground hover:text-foreground" />
-                              </Button>
+                            {isAdmin && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  title="Edit Unit"
+                                  onClick={() => { setEditingUnit(u); setIsAddUnitOpen(true) }}
+                                  className="size-8 p-0"
+                                >
+                                  <Edit2 className="size-4 text-muted-foreground hover:text-foreground" />
+                                </Button>
+                                {u.status === 'archived' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Reactivate Unit"
+                                    onClick={() => handleReactivateUnit(u)}
+                                    className="size-8 p-0"
+                                  >
+                                    <RotateCcw className="size-4 text-muted-foreground hover:text-emerald-600" />
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>
@@ -725,7 +749,10 @@ function ProductFormDialog({
   const archiveMutation = useArchiveProduct()
 
   const categoryOptions = useMemo(() => flattenForSelect(categories), [categories])
-  const activeUnits = useMemo(() => units.filter((u) => u.status === 'active'), [units])
+  const activeUnits = useMemo(
+    () => units.filter((u) => u.status === 'active' || (initialData && u.id === initialData.unit_id)),
+    [units, initialData],
+  )
 
   const [name, setName] = useState(initialData?.name ?? '')
   const [skuCode, setSkuCode] = useState(initialData?.sku_code ?? '')
@@ -915,6 +942,7 @@ function ProductFormDialog({
                   {activeUnits.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.name} ({u.abbreviation ?? '—'})
+                      {u.status === 'archived' && ' (archived)'}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -166,10 +166,29 @@ async function runTests() {
     const search = await api('/products?search=widget', { headers: adminHeaders })
     assert((search.json.products as Array<{ name: string }>).some((p) => p.name.includes('Widget')), 'Search by name works')
 
-    const filterCat = await api(`/products?categoryId=${GROCERY}`, { headers: adminHeaders })
+    // Leaf category filter matches products living exactly in that category.
+    const SNAKS_LEAF = 'c2000000-0000-0000-0000-000000000003'
+    const filterLeaf = await api(`/products?categoryId=${SNAKS_LEAF}`, { headers: adminHeaders })
     assert(
-      (filterCat.json.products as Array<{ category_id: string }>).every((p) => p.category_id === GROCERY),
-      'Filter by category works',
+      (filterLeaf.json.products as Array<{ category_id: string }>).every((p) => p.category_id === SNAKS_LEAF),
+      'Leaf category filter returns only products in that exact category',
+    )
+
+    // Broad parent filter includes products in all sub-categories (any depth).
+    const filterParent = await api(`/products?categoryId=${ELECTRONICS}`, { headers: adminHeaders })
+    const parentPids = new Set((filterParent.json.products as Array<{ category_id: string }>).map((p) => p.category_id))
+    const descendantIds = new Set([
+      ELECTRONICS,
+      'c2000000-0000-0000-0000-000000000001', // Mobile Accessories
+      'c2000000-0000-0000-0000-000000000002', // Audio
+    ])
+    assert(
+      parentPids.size > 0 && [...parentPids].every((id) => descendantIds.has(id)),
+      'Parent category filter includes products from its sub-categories',
+    )
+    assert(
+      (filterParent.json.products as Array<{ id: string }>).some((p) => p.id === 'd1000000-0000-0000-0000-000000000002'),
+      'Electronics filter surfaces a product living in the Audio sub-category',
     )
 
     // -------------------------------------------------------------------------
@@ -245,6 +264,12 @@ async function runTests() {
 
     const deactivateUnit = await api(`/units/${newUnitId}`, { method: 'PATCH', headers: adminHeaders, body: { status: 'archived' } })
     assert((deactivateUnit.json.unit as { status?: string })?.status === 'archived', 'Unit deactivated via PATCH status (no hard delete)')
+
+    const reactivateUnit = await api(`/units/${newUnitId}`, { method: 'PATCH', headers: adminHeaders, body: { status: 'active' } })
+    assert(
+      reactivateUnit.res.status === 200 && (reactivateUnit.json.unit as { status?: string })?.status === 'active',
+      'Deactivated unit can be reactivated via PATCH status (soft archive is reversible)',
+    )
 
     // -------------------------------------------------------------------------
     // 12. NO HARD-DELETE ROUTES EXIST
