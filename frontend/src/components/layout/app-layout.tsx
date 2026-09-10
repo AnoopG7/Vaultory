@@ -20,6 +20,7 @@ import {
 import { AppSidebar } from "@/components/layout";
 import { ModeToggle } from "@/components/theme";
 import { useAuthStore } from "@/stores";
+import { AlertsCenterPopover } from "@/components/alerts/alerts-center-popover";
 
 export function AppLayout({ children }: { children?: ReactNode }) {
   return (
@@ -67,6 +68,7 @@ function UserMenu() {
 
   return (
     <div className="flex items-center gap-2">
+      <AlertsCenterPopover />
       <ModeToggle />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
