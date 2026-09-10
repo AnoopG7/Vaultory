@@ -1,8 +1,10 @@
 import type { Request, Response } from 'express'
 import { supabase, supabaseAdmin } from '../../config/index.js'
+import { isProd } from '../../config/env.js'
 import { AppError } from '../../middleware/index.js'
 import type { Role } from '../../middleware/auth.js'
 import type { SignInInput, SignUpInput, VerifyOtpInput, ResetPasswordInput, UserShape } from '../../lib/schemas/index.js'
+import { getMemoryUserByEmail, getMemoryUserById } from '../users/users.store.js'
 
 /**
  * Build the client-facing user shape from a profile row (DB = source of truth)
@@ -11,7 +13,7 @@ import type { SignInInput, SignUpInput, VerifyOtpInput, ResetPasswordInput, User
 function buildUserShape(input: {
   id: string
   email: string
-  profile?: { full_name: string | null; role: Role | null; store_id: string | null; gender: string | null; avatar_url: string | null } | null
+  profile?: { full_name: string | null; role: Role | null; store_id: string | null; gender: string | null; avatar_url: string | null; status?: string | null } | null
 }): UserShape {
   const { id, email, profile } = input
   return {
@@ -96,22 +98,57 @@ export async function handleSignup(req: Request, res: Response) {
  */
 export async function handleSignin(req: Request, res: Response) {
   const { email, password } = req.body as SignInInput
+  const normEmail = email.trim().toLowerCase()
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(),
-    password,
-  })
-  if (error || !data.session) {
-    throw new AppError(401, 'Invalid email or password', 'INVALID_CREDENTIALS')
+  let authUserId: string | null = null
+  let authUserEmail = normEmail
+  let accessToken: string | null = null
+  let refreshToken: string | null = null
+  let expiresAt: number | null = null
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normEmail,
+      password,
+    })
+
+    if (!error && data.session && data.user) {
+      authUserId = data.user.id
+      authUserEmail = data.user.email ?? normEmail
+      accessToken = data.session.access_token
+      refreshToken = data.session.refresh_token
+      expiresAt = data.session.expires_at ?? null
+    }
+  } catch {
+    // Fallback in dev/offline
   }
 
-  const profile = await loadProfile(data.user.id)
+  // If Supabase Auth failed or in dev mode fallback
+  if (!authUserId) {
+    const memUser = getMemoryUserByEmail(normEmail)
+    if (memUser && !isProd) {
+      authUserId = memUser.id
+      authUserEmail = memUser.email
+      accessToken = `dev-token:${memUser.id}`
+      refreshToken = 'dev-refresh-token'
+      expiresAt = Math.floor(Date.now() / 1000) + 3600
+    } else {
+      throw new AppError(401, 'Invalid email or password', 'INVALID_CREDENTIALS')
+    }
+  }
+
+  const profile = await loadProfile(authUserId)
+
+  // Security enforcement: Deactivated accounts cannot authenticate
+  if (profile?.status && profile.status !== 'active') {
+    throw new AppError(403, 'Account is deactivated. Please contact an administrator.', 'ACCOUNT_DEACTIVATED')
+  }
 
   res.json({
-    user: buildUserShape({ id: data.user.id, email: data.user.email ?? email, profile }),
-    token: data.session.access_token,
-    refresh_token: data.session.refresh_token,
-    expires_at: data.session.expires_at ?? null,
+    user: buildUserShape({ id: authUserId, email: authUserEmail, profile }),
+    token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: expiresAt,
   })
 }
 
@@ -144,7 +181,14 @@ export async function handleVerifyOtp(req: Request, res: Response) {
   if (error || !data.session || !data.user) {
     throw new AppError(401, 'Invalid or expired verification code', 'OTP_INVALID')
   }
+
   const profile = await loadProfile(data.user.id)
+
+  // Security enforcement: Deactivated accounts cannot verify session
+  if (profile?.status && profile.status !== 'active') {
+    throw new AppError(403, 'Account is deactivated. Please contact an administrator.', 'ACCOUNT_DEACTIVATED')
+  }
+
   res.json({
     user: buildUserShape({ id: data.user.id, email: data.user.email ?? email, profile }),
     token: data.session.access_token,
@@ -210,14 +254,32 @@ export async function handleSignout(_req: Request, res: Response) {
   res.json({ message: 'Signed out successfully.' })
 }
 
-/** Loads a profile row (role/store/name) for a user id. */
+/** Loads a profile row (role/store/name/status) for a user id with fallback. */
 async function loadProfile(userId: string) {
-  const { data } = await supabase
-    .from('profiles')
-    .select('full_name, role, store_id, gender, avatar_url')
-    .eq('id', userId)
-    .maybeSingle()
-  return data ?? null
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name, role, store_id, gender, avatar_url, status')
+      .eq('id', userId)
+      .maybeSingle()
+    if (data) return data
+  } catch {
+    // Fallback in dev/offline
+  }
+
+  const memUser = getMemoryUserById(userId)
+  if (memUser) {
+    return {
+      full_name: memUser.full_name,
+      role: memUser.role,
+      store_id: memUser.store_id,
+      gender: memUser.gender,
+      avatar_url: memUser.avatar_url,
+      status: memUser.status,
+    }
+  }
+
+  return null
 }
 
 /**
@@ -225,6 +287,12 @@ async function loadProfile(userId: string) {
  */
 export async function handleMe(req: Request, res: Response) {
   const profile = await loadProfile(req.userId!)
+
+  // Security enforcement: Deactivated accounts cannot fetch user profile
+  if (profile?.status && profile.status !== 'active') {
+    throw new AppError(403, 'Account is deactivated. Please contact an administrator.', 'ACCOUNT_DEACTIVATED')
+  }
+
   res.json({
     user: buildUserShape({
       id: req.userId!,
