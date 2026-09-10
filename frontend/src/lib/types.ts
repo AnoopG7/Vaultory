@@ -408,6 +408,7 @@ export interface SaleListResponse {
 export interface SaleDetailResponse {
   sale: Sale
   lines: SaleLine[]
+  returns?: (SaleReturn & { lines?: SaleReturnLine[] })[]
 }
 
 export interface SaleInputLine {
@@ -446,6 +447,23 @@ export interface SaleReturnLine {
 export interface SaleReturnDetailResponse {
   return: SaleReturn
   lines: SaleReturnLine[]
+}
+
+export interface SaleReturnsListResponse {
+  returns: SaleReturn[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface CreateSaleReturnInput {
+  reason: string
+  notes?: string
+  lines: {
+    sale_line_id: string
+    product_id: string
+    qty_returned: number
+  }[]
 }
 
 // ── Purchase Orders ────────────────────────────────────────────────────────

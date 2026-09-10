@@ -14,6 +14,11 @@ export const queryKeys = {
     all: ['sales'] as const,
     list: (params: unknown) => [...queryKeys.sales.all, 'list', params] as const,
     detail: (id: string) => [...queryKeys.sales.all, 'detail', id] as const,
+    returns: (params?: unknown) => [...queryKeys.sales.all, 'returns', params] as const,
+  },
+  audit: {
+    all: ['audit'] as const,
+    list: (params?: unknown) => [...queryKeys.audit.all, 'list', params] as const,
   },
   stores: {
     all: ['stores'] as const,
