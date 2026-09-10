@@ -9,6 +9,7 @@ import { purchaseOrdersRoutes } from '../modules/purchase-orders/index.js'
 import { usersRoutes } from '../modules/users/index.js'
 import { inventoryRoutes } from '../modules/inventory/index.js'
 import { alertsRoutes } from '../modules/alerts/index.js'
+import { auditRoutes } from '../modules/audit/index.js'
 
 /**
  * Central API router (mounted at /api in app.ts).
@@ -34,6 +35,7 @@ api.use('/', purchaseOrdersRoutes)
 api.use('/', usersRoutes)
 api.use('/', inventoryRoutes)
 api.use('/', alertsRoutes)
+api.use('/', auditRoutes)
 
 export default api
 
