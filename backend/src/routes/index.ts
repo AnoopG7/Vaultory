@@ -6,6 +6,7 @@ import { dashboardRoutes } from '../modules/dashboard/index.js'
 import { referenceRoutes } from '../modules/reference/index.js'
 import { suppliersRoutes } from '../modules/suppliers/index.js'
 import { purchaseOrdersRoutes } from '../modules/purchase-orders/index.js'
+import { usersRoutes } from '../modules/users/index.js'
 
 /**
  * Central API router (mounted at /api in app.ts).
@@ -28,6 +29,7 @@ api.use('/', dashboardRoutes)
 api.use('/', referenceRoutes)
 api.use('/', suppliersRoutes)
 api.use('/', purchaseOrdersRoutes)
+api.use('/', usersRoutes)
 
 export default api
 

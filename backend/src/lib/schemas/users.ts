@@ -8,29 +8,44 @@ import { genderSchema, userRoleSchema } from './enums.js'
  * Admin-managed user administration on top of auth.users + profiles.
  */
 
+// GET /users query params.
+export const listUsersQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  role: z.union([userRoleSchema, z.literal('all')]).optional(),
+  status: z.enum(['active', 'archived', 'all']).default('all'),
+  store_id: z.string().trim().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>
+
 // POST /users — admin creates a user via Supabase Auth + profile row.
 export const createUserSchema = z.object({
   email: emailSchema,
-  password: z.string().min(8).max(72),
-  fullName: z.string().trim().min(1).max(200),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(72),
+  fullName: z.string().trim().min(1, 'Full name is required').max(200),
   role: userRoleSchema.default('store_staff'),
-  storeId: uuidSchema.nullish(),
-  gender: genderSchema.optional(),
-  address: z.string().trim().max(2000).optional(),
-  phone: z.string().trim().max(20).optional(),
+  storeId: uuidSchema.nullable().optional(),
+  gender: genderSchema.nullable().optional(),
+  address: z.string().trim().max(2000).nullable().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
 })
 export type CreateUserInput = z.infer<typeof createUserSchema>
 
-// PATCH /users/:id — edit name / role / store.
+// PATCH /users/:id — edit name / role / store / details.
 export const updateUserSchema = z.object({
-  fullName: z.string().trim().min(1).max(200).optional(),
+  fullName: z.string().trim().min(1, 'Full name cannot be empty').max(200).optional(),
   role: userRoleSchema.optional(),
-  storeId: uuidSchema.nullish(),
-  phone: z.string().trim().max(20).optional(),
+  storeId: uuidSchema.nullable().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
+  address: z.string().trim().max(2000).nullable().optional(),
+  gender: genderSchema.nullable().optional(),
 })
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 
-// PATCH /users/:id/deactivate  (and /reactivate) — soft status toggle.
+// PATCH /users/:id/deactivate (and /reactivate) — soft status toggle.
 export const deactivateUserSchema = z.object({
   status: z.enum(['active', 'archived']),
 })
+export type DeactivateUserInput = z.infer<typeof deactivateUserSchema>
+

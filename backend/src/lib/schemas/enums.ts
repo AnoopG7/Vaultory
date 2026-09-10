@@ -16,12 +16,16 @@ export type UserRole = z.infer<typeof userRoleSchema>
 
 // Entity status (used by most master tables)
 export const entityStatusSchema = z.enum(['active', 'archived'])
+export type EntityStatus = z.infer<typeof entityStatusSchema>
 
 // Location type (stores vs warehouses)
 export const locationTypeSchema = z.enum(['store', 'warehouse'])
+export type LocationType = z.infer<typeof locationTypeSchema>
 
 // Gender (optional identity field on profiles)
 export const genderSchema = z.enum(['male', 'female', 'other', 'prefer_not_to_say'])
+export type Gender = z.infer<typeof genderSchema>
+
 
 // Stock status badges (SRS §4.1.3) — computed at query time
 export const stockStatusSchema = z.enum(['out_of_stock', 'low', 'in_stock', 'over_stock'])
