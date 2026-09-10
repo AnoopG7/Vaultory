@@ -808,11 +808,44 @@ export interface DailyReportRow {
   sales_value: number
 }
 
+export interface DailyReportItem {
+  store_id: string
+  store_name: string
+  product_id: string
+  product_name: string
+  sku_code: string
+  units_sold: number
+  sales_value: number
+  sale_date: string
+}
+
 export interface DailyReportResponse {
   date: string
-  rows: DailyReportRow[]
-  total_units: number
-  total_value: number
+  items: DailyReportItem[]
+  rows?: DailyReportRow[]
+  summary: {
+    total_units_sold: number
+    total_sales_value: number
+    transactions_count: number
+  }
+  total_units?: number
+  total_value?: number
+}
+
+export interface MonthlyTrendItem {
+  month: string
+  label: string
+  units_sold: number
+  sales_value: number
+  orders_count: number
+}
+
+export interface ProductBreakdownItem {
+  product_id: string
+  product_name: string
+  sku_code: string
+  units_sold: number
+  sales_value: number
 }
 
 export interface QuarterlyReportRow {
@@ -828,9 +861,17 @@ export interface QuarterlyReportRow {
 
 export interface QuarterlyReportResponse {
   quarter: string
-  rows: QuarterlyReportRow[]
-  total_units: number
-  total_value: number
+  date_range: { from: string; to: string }
+  monthly_breakdown: MonthlyTrendItem[]
+  product_breakdown: ProductBreakdownItem[]
+  rows?: QuarterlyReportRow[]
+  summary: {
+    total_units_sold: number
+    total_sales_value: number
+    orders_count: number
+  }
+  total_units?: number
+  total_value?: number
 }
 
 export interface YearlyReportRow {
@@ -847,23 +888,43 @@ export interface YearlyReportRow {
 
 export interface YearlyReportResponse {
   year: number
-  rows: YearlyReportRow[]
-  total_units: number
-  total_value: number
+  monthly_breakdown: MonthlyTrendItem[]
+  rows?: YearlyReportRow[]
+  summary: {
+    total_units_sold: number
+    total_sales_value: number
+    orders_count: number
+    average_monthly_sales: number
+  }
+  total_units?: number
+  total_value?: number
 }
 
-export interface StorePerformanceRow {
+export interface StorePerformanceItem {
   store_id: string
   store_name: string
   store_code: string
-  total_sales: number
-  total_units: number
-  sale_count: number
-  avg_sale_value: number
+  city: string
+  total_sales_value: number
+  total_units_sold: number
+  total_orders: number
+  average_order_value: number
 }
 
+export type StorePerformanceRow = StorePerformanceItem
+
 export interface StorePerformanceResponse {
-  stores: StorePerformanceRow[]
+  stores: StorePerformanceItem[]
+  comparison?: {
+    best_performing_store: string | null
+    total_revenue: number
+    average_store_revenue: number
+  }
+  summary?: {
+    total_revenue: number
+    total_orders: number
+    total_units_sold: number
+  }
   period?: { from: string | null; to: string | null }
 }
 

@@ -60,6 +60,13 @@ export const queryKeys = {
     unreadCount: () => [...queryKeys.alerts.all, 'unread-count'] as const,
     preferences: () => [...queryKeys.alerts.all, 'preferences'] as const,
   },
+  reports: {
+    all: ['reports'] as const,
+    daily: (params?: unknown) => [...queryKeys.reports.all, 'daily', params] as const,
+    quarterly: (params?: unknown) => [...queryKeys.reports.all, 'quarterly', params] as const,
+    yearly: (params?: unknown) => [...queryKeys.reports.all, 'yearly', params] as const,
+    storePerformance: (params?: unknown) => [...queryKeys.reports.all, 'storePerformance', params] as const,
+  },
 }
 
 
