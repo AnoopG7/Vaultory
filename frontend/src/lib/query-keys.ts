@@ -36,5 +36,13 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.purchaseOrders.all, 'detail', id] as const,
     receipts: (id: string) => [...queryKeys.purchaseOrders.all, 'receipts', id] as const,
   },
+  users: {
+    all: ['users'] as const,
+    lists: () => [...queryKeys.users.all, 'list'] as const,
+    list: (params?: unknown) => [...queryKeys.users.lists(), params] as const,
+    details: () => [...queryKeys.users.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.users.details(), id] as const,
+  },
 }
+
 

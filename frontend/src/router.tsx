@@ -10,6 +10,7 @@ import PurchaseOrdersPage from '@/pages/purchase-orders'
 import StoresPage from '@/pages/stores'
 import ReportsPage from '@/pages/reports'
 import SettingsPage from '@/pages/settings'
+import UsersPage from '@/pages/users'
 import NotFoundPage from '@/pages/not-found'
 import AccessDeniedPage from '@/pages/access-denied'
 import LoginPage from '@/pages/login'
@@ -32,6 +33,7 @@ export const router = createBrowserRouter([
       { path: '/stores', element: <StoresPage /> },
       { path: '/reports', element: <ReportsPage /> },
       { path: '/settings', element: <SettingsPage /> },
+      { path: '/users', element: <UsersPage /> },
       { path: '/components', element: <ComponentsDemoPage /> },
     ],
   },
