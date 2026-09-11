@@ -28,12 +28,14 @@ function buildUserShape(input: {
 }
 
 /**
- * POST /api/auth/signup — create a user + profile.
- * ADMIN-GATED (SRS: Admin creates staff accounts). Uses the service-role key
- * to create the Supabase Auth user and idempotently insert the profiles row.
+ * POST /api/auth/signup — PUBLIC self-service account creation.
+ * Uses the service-role key to create the Supabase Auth user and idempotently
+ * insert the profiles row. Role is ALWAYS clamped to store_staff server-side
+ * (never read from the request) — prevents privilege escalation.
  */
 export async function handleSignup(req: Request, res: Response) {
   const body = req.body as SignUpInput
+  const role: Role = 'store_staff'
 
   if (!supabaseAdmin) {
     throw new AppError(503, 'User provisioning is not configured', 'SERVICE_UNAVAILABLE')
@@ -66,7 +68,7 @@ export async function handleSignup(req: Request, res: Response) {
     id: authUser.user.id,
     email: body.email.trim().toLowerCase(),
     full_name: body.fullName,
-    role: body.role,
+    role,
     store_id: body.storeId ?? null,
     gender: body.gender ?? null,
     address: body.address ?? null,
@@ -84,7 +86,7 @@ export async function handleSignup(req: Request, res: Response) {
       email: body.email.trim().toLowerCase(),
       profile: {
         full_name: body.fullName,
-        role: body.role,
+        role,
         store_id: body.storeId ?? null,
         gender: body.gender ?? null,
         avatar_url: null,

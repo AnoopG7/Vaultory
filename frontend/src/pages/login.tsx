@@ -3,7 +3,8 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, PackagePlus, Sparkles } from 'lucide-react'
+import { z } from 'zod'
 import {
   Button,
   Card,
@@ -21,21 +22,40 @@ import {
   Input,
   PasswordInput,
 } from '@/components/ui'
-import { signInSchema, type SignInInput } from '@/lib/schemas'
+import { signInSchema, signUpSchema, type SignInInput } from '@/lib/schemas'
 import { useAuthStore } from '@/stores'
+
+type Mode = 'signin' | 'signup'
+
+const signUpFormSchema = signUpSchema
+  .extend({
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+type SignUpFormInput = z.infer<typeof signUpFormSchema>
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const signIn = useAuthStore((s) => s.signIn)
+  const signUp = useAuthStore((s) => s.signUp)
   const authLoading = useAuthStore((s) => s.isLoading)
   const [submitting, setSubmitting] = useState(false)
+  const [mode, setMode] = useState<Mode>('signin')
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
-  const form = useForm<SignInInput>({
+  const signInForm = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: '', password: '' },
+  })
+
+  const signUpForm = useForm<SignUpFormInput>({
+    resolver: zodResolver(signUpFormSchema),
+    defaultValues: { email: '', password: '', fullName: '', confirmPassword: '' },
   })
 
   const from = (location.state as { from?: string } | null)?.from ?? '/'
@@ -44,12 +64,27 @@ export default function LoginPage() {
     return <Navigate to="/" replace />
   }
 
-  async function onSubmit(values: SignInInput) {
+  async function onSubmitSignIn(values: SignInInput) {
     setSubmitting(true)
     try {
       await signIn(values)
       toast.success('Signed in successfully')
       navigate(from, { replace: true })
+    } catch {
+      // error surfaced via store.error
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function onSubmitSignUp({ confirmPassword: _confirm, ...payload }: SignUpFormInput) {
+    setSubmitting(true)
+    try {
+      await signUp(payload)
+      toast.success('Account created — sign in to continue')
+      setMode('signin')
+      signUpForm.reset()
+      signInForm.reset()
     } catch {
       // error surfaced via store.error
     } finally {
@@ -71,54 +106,153 @@ export default function LoginPage() {
 
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-          <CardDescription>Enter your credentials to access the dashboard.</CardDescription>
+          <CardTitle>{mode === 'signin' ? 'Sign in' : 'Create account'}</CardTitle>
+          <CardDescription>
+            {mode === 'signin'
+              ? 'Enter your credentials to access the dashboard.'
+              : 'Register as store staff. An admin can later assign your store & role.'}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="you@company.com" autoComplete="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <PasswordInput
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" disabled={authLoading || submitting}>
-                {(authLoading || submitting) && <Loader2 className="animate-spin" />}
-                Sign in
+
+        {mode === 'signin' ? (
+          <>
+            <CardContent>
+              <Form {...signInForm}>
+                <form onSubmit={signInForm.handleSubmit(onSubmitSignIn)} className="grid gap-4">
+                  <FormField
+                    control={signInForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="you@company.com" autoComplete="email" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={signInForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <PasswordInput
+                            placeholder="••••••••"
+                            autoComplete="current-password"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={authLoading || submitting}>
+                    {(authLoading || submitting) && <Loader2 className="animate-spin" />}
+                    Sign in
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+            <CardFooter className="flex-col items-stretch gap-3 text-sm">
+              <div className="flex justify-between">
+                <Link to="/forgot-password" className="text-muted-foreground hover:text-foreground">
+                  Forgot password?
+                </Link>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setMode('signup')}>
+                <PackagePlus className="size-4 mr-1.5" />
+                New here? Create an account
               </Button>
-            </form>
-          </Form>
-        </CardContent>
-        <CardFooter className="justify-between text-sm">
-          <Link to="/forgot-password" className="text-muted-foreground hover:text-foreground">
-            Forgot password?
-          </Link>
-        </CardFooter>
+            </CardFooter>
+          </>
+        ) : (
+          <>
+            <CardContent>
+              <Form {...signUpForm}>
+                <form onSubmit={signUpForm.handleSubmit(onSubmitSignUp)} className="grid gap-4">
+                  <FormField
+                    control={signUpForm.control}
+                    name="fullName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Jane Doe" autoComplete="name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={signUpForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="you@company.com" autoComplete="email" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={signUpForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <PasswordInput
+                            placeholder="Minimum 8 characters"
+                            autoComplete="new-password"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={signUpForm.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirm password</FormLabel>
+                        <FormControl>
+                          <PasswordInput
+                            placeholder="Re-enter your password"
+                            autoComplete="new-password"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={authLoading || submitting}>
+                    {(authLoading || submitting) && <Loader2 className="animate-spin" />}
+                    Create account
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+            <CardFooter className="justify-center text-sm">
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={() => setMode('signin')}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Already have an account? Sign in
+              </Button>
+            </CardFooter>
+          </>
+        )}
       </Card>
     </div>
   )
