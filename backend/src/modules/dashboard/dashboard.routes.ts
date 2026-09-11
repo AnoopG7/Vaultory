@@ -8,9 +8,9 @@ import {
   validated,
 } from '../../middleware/index.js'
 import {
-  RevenueTrendQuery,
-  TopProductsQuery,
-  StoreComparisonQuery,
+  revenueTrendQuerySchema,
+  topProductsQuerySchema,
+  storeComparisonQuerySchema,
 } from '../../lib/schemas/index.js'
 
 const router = Router()
@@ -147,9 +147,9 @@ router.get(
 router.get(
   '/dashboard/revenue-trend',
   requireAuth,
-  validate(RevenueTrendQuery, 'query'),
+  validate(revenueTrendQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
-    const { days } = validated(req, 'query', RevenueTrendQuery)
+    const { days } = validated(req, 'query', revenueTrendQuerySchema)
 
     const start = new Date()
     start.setUTCHours(0, 0, 0, 0)
@@ -188,9 +188,9 @@ router.get(
 router.get(
   '/dashboard/top-products',
   requireAuth,
-  validate(TopProductsQuery, 'query'),
+  validate(topProductsQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
-    const { limit, days } = validated(req, 'query', TopProductsQuery)
+    const { limit, days } = validated(req, 'query', topProductsQuerySchema)
 
     const start = new Date()
     start.setUTCHours(0, 0, 0, 0)
@@ -247,9 +247,9 @@ router.get(
 router.get(
   '/dashboard/store-comparison',
   requireAuth,
-  validate(StoreComparisonQuery, 'query'),
+  validate(storeComparisonQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
-    const { from, to } = validated(req, 'query', StoreComparisonQuery)
+    const { from, to } = validated(req, 'query', storeComparisonQuerySchema)
 
     // Load all stores.
     const { data: stores, error: storesErr } = await supabase

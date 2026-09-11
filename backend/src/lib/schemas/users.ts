@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { emailSchema, uuidSchema } from './common.js'
-import { genderSchema, userRoleSchema } from './enums.js'
+import { entityStatusSchema, genderSchema, userRoleSchema } from './enums.js'
 
 /**
  * Users (admin) module schemas — create/edit/deactivate users.
@@ -45,7 +45,7 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>
 
 // PATCH /users/:id/deactivate (and /reactivate) — soft status toggle.
 export const deactivateUserSchema = z.object({
-  status: z.enum(['active', 'archived']),
+  status: entityStatusSchema,
 })
 export type DeactivateUserInput = z.infer<typeof deactivateUserSchema>
 

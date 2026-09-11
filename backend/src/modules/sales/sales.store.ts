@@ -3,7 +3,7 @@ import { AppError } from '../../middleware/index.js'
 import type { Role } from '../../middleware/auth.js'
 import { recordAuditLog } from '../users/users.store.js'
 import { memoryInventory, computeStockStatus } from '../inventory/inventory.store.js'
-import type { CreateSaleRequest, ReturnSaleRequest, VoidSaleRequest } from '../../lib/schemas/sales.schema.js'
+import type { CreateSaleInput, ReturnSaleInput, VoidSaleInput } from '../../lib/schemas/sales.js'
 
 export interface LocalSaleLine {
   id: string
@@ -205,16 +205,16 @@ export function mutateMemoryStock(productId: string, locationId: string, qtyDelt
  * Record a sale with stock deduction, pre-flight check, and audit log.
  */
 export async function createSaleTransaction(
-  payload: CreateSaleRequest,
+  payload: CreateSaleInput,
   actor: { id?: string; email?: string; role?: Role },
   clientMeta: { ip?: string; userAgent?: string } = {},
 ): Promise<LocalSale> {
-  const { store_id, sale_datetime, discount, notes, lines } = payload
-  const locationId = await getStoreLocationId(store_id)
+  const { storeId, saleDatetime, discount, notes, lines } = payload
+  const locationId = await getStoreLocationId(storeId)
 
   // 1. Pre-flight stock sufficiency check
   const insufficient: string[] = []
-  const productIds = [...new Set(lines.map((l) => l.product_id))]
+  const productIds = [...new Set(lines.map((l) => l.productId))]
 
   // Check Supabase or memory
   let onHandMap = new Map<string, number>()
@@ -243,9 +243,9 @@ export async function createSaleTransaction(
   }
 
   for (const line of lines) {
-    const available = onHandMap.get(line.product_id) ?? 0
+    const available = onHandMap.get(line.productId) ?? 0
     if (line.qty > available + 1e-9) {
-      insufficient.push(line.product_id)
+      insufficient.push(line.productId)
     }
   }
 
@@ -263,16 +263,16 @@ export async function createSaleTransaction(
   let computedSubtotal = 0
   let computedTotalQty = 0
   const lineDetails = lines.map((line) => {
-    let unitPrice = line.unit_price
+    let unitPrice = line.unitPrice
     if (unitPrice == null) {
-      const p = memoryInventory.find((i) => i.product_id === line.product_id)
+      const p = memoryInventory.find((i) => i.product_id === line.productId)
       unitPrice = p ? p.sale_price : 0
     }
     const lineTotal = Number((line.qty * unitPrice).toFixed(2))
     computedSubtotal += lineTotal
     computedTotalQty += line.qty
     return {
-      product_id: line.product_id,
+      product_id: line.productId,
       qty: line.qty,
       unit_price: unitPrice,
       line_total: lineTotal,
@@ -284,7 +284,7 @@ export async function createSaleTransaction(
   const saleId = `s-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
   saleCounter++
   const saleNumber = `SALE-2026-${String(saleCounter).padStart(4, '0')}`
-  const now = sale_datetime ?? new Date().toISOString()
+  const now = saleDatetime ?? new Date().toISOString()
 
   let dbPersisted = false
 
@@ -294,7 +294,7 @@ export async function createSaleTransaction(
       const { data: dbSale, error: saleError } = await supabase
         .from('sales')
         .insert({
-          store_id,
+          store_id: storeId,
           sale_datetime: now,
           discount: effectiveDiscount,
           notes: notes ?? null,
@@ -346,7 +346,7 @@ export async function createSaleTransaction(
   const createdSale: LocalSale = {
     id: saleId,
     sale_number: saleNumber,
-    store_id,
+    store_id: storeId,
     sale_datetime: now,
     total_items: lineDetails.length,
     total_qty: computedTotalQty,
@@ -389,7 +389,7 @@ export async function createSaleTransaction(
     entityId: saleId,
     detail: {
       sale_number: saleNumber,
-      store_id,
+      store_id: storeId,
       items_count: lineDetails.length,
       total_qty: computedTotalQty,
       subtotal: computedSubtotal,
@@ -538,7 +538,7 @@ export async function getSaleDetail(id: string): Promise<{
  */
 export async function voidSaleTransaction(
   id: string,
-  payload: VoidSaleRequest,
+  payload: VoidSaleInput,
   actor: { id?: string; email?: string; role?: Role },
   clientMeta: { ip?: string; userAgent?: string } = {},
 ): Promise<{ message: string }> {
@@ -626,7 +626,7 @@ export async function voidSaleTransaction(
  */
 export async function processSaleReturnTransaction(
   saleId: string,
-  payload: ReturnSaleRequest,
+  payload: ReturnSaleInput,
   actor: { id?: string; email?: string; role?: Role },
   clientMeta: { ip?: string; userAgent?: string } = {},
 ): Promise<{ return: LocalSaleReturn; lines: LocalSaleReturnLine[] }> {
@@ -650,36 +650,36 @@ export async function processSaleReturnTransaction(
   let totalRefund = 0
 
   for (const item of lines) {
-    const origLine = saleDetail.lines.find((sl) => sl.id === item.sale_line_id)
+    const origLine = saleDetail.lines.find((sl) => sl.id === item.saleLineId)
     if (!origLine) {
-      throw new AppError(400, `Sale line ${item.sale_line_id} does not exist on this sale`, 'LINE_NOT_FOUND')
+      throw new AppError(400, `Sale line ${item.saleLineId} does not exist on this sale`, 'LINE_NOT_FOUND')
     }
-    if (origLine.product_id !== item.product_id) {
-      throw new AppError(400, `Product mismatch for line ${item.sale_line_id}`, 'PRODUCT_MISMATCH')
+    if (origLine.product_id !== item.productId) {
+      throw new AppError(400, `Product mismatch for line ${item.saleLineId}`, 'PRODUCT_MISMATCH')
     }
 
     const previouslyReturned = previousReturns
-      .filter((pr) => pr.sale_line_id === item.sale_line_id)
+      .filter((pr) => pr.sale_line_id === item.saleLineId)
       .reduce((acc, curr) => acc + curr.qty_returned, 0)
 
     const remainingReturnable = origLine.qty - previouslyReturned
-    if (item.qty_returned > remainingReturnable + 1e-9) {
+    if (item.qtyReturned > remainingReturnable + 1e-9) {
       throw new AppError(
         400,
-        `Cannot return ${item.qty_returned} of product. Only ${remainingReturnable} remaining returnable for this line.`,
+        `Cannot return ${item.qtyReturned} of product. Only ${remainingReturnable} remaining returnable for this line.`,
         'RETURN_EXCEEDS_SOLD',
       )
     }
 
-    const lineRefund = Number((item.qty_returned * origLine.unit_price).toFixed(2))
+    const lineRefund = Number((item.qtyReturned * origLine.unit_price).toFixed(2))
     totalRefund += lineRefund
 
     returnLinesProcessed.push({
       id: `rtl-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       return_id: returnId,
-      sale_line_id: item.sale_line_id,
-      product_id: item.product_id,
-      qty_returned: item.qty_returned,
+      sale_line_id: item.saleLineId,
+      product_id: item.productId,
+      qty_returned: item.qtyReturned,
       unit_price: origLine.unit_price,
       line_refund: lineRefund,
       created_at: now,

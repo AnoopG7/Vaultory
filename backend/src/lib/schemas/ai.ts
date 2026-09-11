@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { idParamSchema, nonNegativeMoneySchema, textSchema, uuidSchema } from './common.js'
+import { idParamSchema, nonNegativeQtySchema, textSchema, uuidSchema } from './common.js'
 import { aiRecommendationStatusSchema, aiRecommendationTypeSchema } from './enums.js'
 
 /**
@@ -12,8 +12,8 @@ export const createAiRecommendationSchema = z.object({
   type: aiRecommendationTypeSchema,
   productId: uuidSchema,
   locationId: uuidSchema.nullish(),
-  recommendedValue: nonNegativeMoneySchema, // NUMERIC(12,3)
-  currentValue: nonNegativeMoneySchema.nullish(),
+  recommendedValue: nonNegativeQtySchema, // NUMERIC(12,3)
+  currentValue: nonNegativeQtySchema.nullish(),
   reasoning: textSchema.min(1),
   modelUsed: z.string().trim().max(100).optional(),
   confidence: z.coerce.number().min(0).max(1).optional(),
@@ -24,7 +24,7 @@ export type CreateAiRecommendationInput = z.infer<typeof createAiRecommendationS
 
 // POST /ai/recommendations/:id/accept | /modify | /reject
 export const acceptAiRecommendationSchema = z.object({
-  acceptedValue: nonNegativeMoneySchema.optional(),
+  acceptedValue: nonNegativeQtySchema.optional(),
 })
 export type AcceptAiRecommendationInput = z.infer<typeof acceptAiRecommendationSchema>
 
@@ -39,13 +39,13 @@ export const aiRecommendationSchema = z.object({
   status: aiRecommendationStatusSchema,
   product_id: uuidSchema,
   location_id: uuidSchema.nullable(),
-  recommended_value: nonNegativeMoneySchema,
-  current_value: nonNegativeMoneySchema.nullable(),
+  recommended_value: nonNegativeQtySchema,
+  current_value: nonNegativeQtySchema.nullable(),
   reasoning: z.string(),
   model_used: z.string().nullable(),
   confidence: z.coerce.number().min(0).max(1).nullable(),
   input_data: z.unknown().nullable(),
-  accepted_value: nonNegativeMoneySchema.nullable(),
+  accepted_value: nonNegativeQtySchema.nullable(),
   acted_on_by: uuidSchema.nullable(),
   acted_on_at: z.string().nullable(),
   rejection_reason: z.string().nullable(),
