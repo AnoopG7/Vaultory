@@ -15,6 +15,7 @@ import {
   supplierIdParamSchema,
   supplierProductParamSchema,
   updateSupplierProductSchema,
+  mapSupplierProductsSchema,
   type CreateSupplierInput,
   type UpdateSupplierInput,
   type ListSuppliersQuery,
@@ -552,22 +553,23 @@ router.post(
   '/suppliers/:id/products',
   requireAuth,
   validate(supplierIdParamSchema, 'params'),
+  validate(mapSupplierProductsSchema),
   asyncHandler(async (req, res) => {
     assertCanManageSuppliers(req.role)
 
     const { id } = validated(req, 'params', supplierIdParamSchema)
-    const { product_id, unit_cost, lead_time_override, is_preferred } = req.body
-
-    if (!product_id) {
-      throw new AppError(400, 'product_id is required', 'MISSING_PRODUCT_ID')
-    }
+    const { product_id, unit_cost, lead_time_override, is_preferred } = validated(
+      req,
+      'body',
+      mapSupplierProductsSchema,
+    )
 
     const mappingRecord: LocalSupplierProduct = {
       supplier_id: id,
       product_id,
-      unit_cost: unit_cost !== undefined ? Number(unit_cost) : null,
-      lead_time_override: lead_time_override ? Number(lead_time_override) : null,
-      is_preferred: Boolean(is_preferred),
+      unit_cost: unit_cost ?? null,
+      lead_time_override: lead_time_override ?? null,
+      is_preferred: is_preferred ?? false,
       created_at: new Date().toISOString(),
     }
 
