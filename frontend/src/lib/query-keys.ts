@@ -62,6 +62,7 @@ export const queryKeys = {
     list: (params?: unknown) => [...queryKeys.inventory.all, 'list', params] as const,
     detail: (productId: string, locationId?: string) =>
       [...queryKeys.inventory.all, 'detail', productId, locationId ?? 'global'] as const,
+    movements: (params?: unknown) => [...queryKeys.inventory.all, 'movements', params] as const,
   },
   alerts: {
     all: ['alerts'] as const,

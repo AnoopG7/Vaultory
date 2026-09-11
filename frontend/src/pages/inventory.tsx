@@ -13,6 +13,11 @@ import {
   X,
   TrendingDown,
   Loader2,
+  ArrowRightLeft,
+  ClipboardCheck,
+  History,
+  PackageMinus,
+  PackagePlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -46,8 +51,15 @@ import {
   useInventory,
   useUpdateInventoryThresholds,
   useLocations,
+  useProducts,
+  useStockIn,
+  useStockOut,
+  useStockTransfer,
+  useStockAdjust,
+  useInventoryMovements,
 } from '@/hooks'
-import type { InventoryItem, StockStatus } from '@/lib/types'
+import { useAuthStore } from '@/stores'
+import type { InventoryItem, MovementType, StockStatus } from '@/lib/types'
 
 export default function InventoryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -81,6 +93,190 @@ export default function InventoryPage() {
   const locations = useMemo(() => locationsData?.locations ?? [], [locationsData])
 
   const updateThresholdsMutation = useUpdateInventoryThresholds()
+
+  // ── Stock operations ──────────────────────────────────────────────────
+  const user = useAuthStore((s) => s.user)
+  const canManageStock = user?.role === 'admin' || user?.role === 'store_staff'
+
+  const { data: productsData } = useProducts({ limit: 200 })
+  const products = useMemo(() => productsData?.products ?? [], [productsData])
+
+  const [opDialog, setOpDialog] = useState<'stock_in' | 'stock_out' | 'transfer' | 'adjust' | null>(null)
+  const [opForm, setOpForm] = useState({
+    productId: '',
+    locationId: '',
+    destinationLocationId: '',
+    qty: '',
+    newQty: '',
+    reason: '',
+    notes: '',
+    poId: '',
+  })
+  const [opError, setOpError] = useState<string | null>(null)
+
+  const stockInMutation = useStockIn()
+  const stockOutMutation = useStockOut()
+  const transferMutation = useStockTransfer()
+  const adjustMutation = useStockAdjust()
+
+  const operationPending =
+    (opDialog === 'stock_in' && stockInMutation.isPending) ||
+    (opDialog === 'stock_out' && stockOutMutation.isPending) ||
+    (opDialog === 'transfer' && transferMutation.isPending) ||
+    (opDialog === 'adjust' && adjustMutation.isPending)
+
+  // ── Movement history ──────────────────────────────────────────────────
+  const [movementsOpen, setMovementsOpen] = useState(false)
+  const [movementTypeFilter, setMovementTypeFilter] = useState<MovementType | 'all'>('all')
+  const movementsQuery = useInventoryMovements({
+    type: movementTypeFilter !== 'all' ? movementTypeFilter : undefined,
+    limit: 200,
+  })
+  const movements = useMemo(() => movementsQuery.data?.movements ?? [], [movementsQuery.data])
+
+  const openOperation = (op: 'stock_in' | 'stock_out' | 'transfer' | 'adjust', item?: InventoryItem) => {
+    if (item) {
+      setOpForm((f) => ({ ...f, productId: item.product_id, locationId: item.location_id }))
+    }
+    setOpError(null)
+    setOpDialog(op)
+  }
+
+  const closeOperation = () => {
+    setOpDialog(null)
+    setOpError(null)
+  }
+
+  const resetOperationForm = () => {
+    setOpForm({
+      productId: '',
+      locationId: '',
+      destinationLocationId: '',
+      qty: '',
+      newQty: '',
+      reason: '',
+      notes: '',
+      poId: '',
+    })
+  }
+
+  const handleSubmitOperation = async () => {
+    if (!opDialog) return
+
+    const qty = Number(opForm.qty)
+    const productId = opForm.productId
+    const locationId = opForm.locationId
+
+    if (!productId) {
+      setOpError('Please select a product.')
+      return
+    }
+    if (!locationId) {
+      setOpError('Please select a location.')
+      return
+    }
+    if (opDialog === 'transfer' && !opForm.destinationLocationId) {
+      setOpError('Please select a destination location.')
+      return
+    }
+    if (opDialog === 'adjust') {
+      const newQty = Number(opForm.newQty)
+      if (isNaN(newQty) || newQty < 0) {
+        setOpError('Counted quantity must be a non-negative number.')
+        return
+      }
+    } else {
+      if (isNaN(qty) || qty <= 0) {
+        setOpError('Quantity must be a positive number.')
+        return
+      }
+    }
+    if (opDialog === 'stock_out' && !opForm.reason.trim()) {
+      setOpError('A reason is required for stock-out.')
+      return
+    }
+    setOpError(null)
+
+    try {
+      const actionMap = {
+        stock_in: () =>
+          stockInMutation.mutateAsync({
+            productId,
+            locationId,
+            qty,
+            reason: opForm.reason.trim() || undefined,
+            notes: opForm.notes.trim() || undefined,
+            poId: opForm.poId.trim() || null,
+          }),
+        stock_out: () =>
+          stockOutMutation.mutateAsync({
+            productId,
+            locationId,
+            qty,
+            reason: opForm.reason.trim(),
+            notes: opForm.notes.trim() || undefined,
+          }),
+        transfer: () =>
+          transferMutation.mutateAsync({
+            productId,
+            sourceLocationId: opForm.locationId,
+            destinationLocationId: opForm.destinationLocationId,
+            qty,
+            notes: opForm.notes.trim() || undefined,
+          }),
+        adjust: () =>
+          adjustMutation.mutateAsync({
+            productId,
+            locationId,
+            newQty: Number(opForm.newQty),
+            reason: opForm.reason.trim() || undefined,
+            notes: opForm.notes.trim() || undefined,
+          }),
+      }
+      const result = await actionMap[opDialog]()
+
+      const labels = {
+        stock_in: 'Stock-in recorded',
+        stock_out: 'Stock-out recorded',
+        transfer: 'Stock transferred',
+        adjust: 'Stock adjusted',
+      }
+      toast.success(labels[opDialog], {
+        description:
+          'message' in (result as { message: string }) ? (result as { message: string }).message : 'Inventory updated.',
+      })
+      resetOperationForm()
+      closeOperation()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Operation failed'
+      setOpError(msg)
+      toast.error('Stock operation failed', { description: msg })
+    }
+  }
+
+  const movementTypeLabels: Record<MovementType, string> = {
+    stock_in: 'Stock In',
+    stock_out: 'Stock Out',
+    transfer_out: 'Transfer Out',
+    transfer_in: 'Transfer In',
+    adjustment: 'Adjustment',
+    sale: 'Sale',
+    sale_void: 'Sale Void',
+    sale_return: 'Sale Return',
+    po_receipt: 'PO Receipt',
+  }
+
+  const movementBadgeClass: Record<MovementType, string> = {
+    stock_in: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    po_receipt: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    transfer_in: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    sale_return: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    sale_void: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    stock_out: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    transfer_out: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    sale: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    adjustment: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20',
+  }
 
   const items = useMemo(() => inventoryData?.data ?? [], [inventoryData])
 
@@ -196,7 +392,38 @@ export default function InventoryPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canManageStock && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMovementsOpen(true)}
+              className="gap-2"
+            >
+              <History className="size-3.5" />
+              <span>Movements</span>
+            </Button>
+          )}
+          {canManageStock && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => openOperation('stock_in')} className="gap-2">
+                <PackagePlus className="size-3.5" />
+                <span>Stock In</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openOperation('stock_out')} className="gap-2">
+                <PackageMinus className="size-3.5" />
+                <span>Stock Out</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openOperation('transfer')} className="gap-2">
+                <ArrowRightLeft className="size-3.5" />
+                <span>Transfer</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openOperation('adjust')} className="gap-2">
+                <ClipboardCheck className="size-3.5" />
+                <span>Adjust</span>
+              </Button>
+            </>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -714,6 +941,278 @@ export default function InventoryPage() {
               <span>Save Changes</span>
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Operation Dialog */}
+      <Dialog open={Boolean(opDialog)} onOpenChange={(open) => !open && closeOperation()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {opDialog === 'stock_in' && <><PackagePlus className="size-4" /> Record Stock In</>}
+              {opDialog === 'stock_out' && <><PackageMinus className="size-4" /> Record Stock Out</>}
+              {opDialog === 'transfer' && <><ArrowRightLeft className="size-4" /> Transfer Stock</>}
+              {opDialog === 'adjust' && <><ClipboardCheck className="size-4" /> Stock Adjustment</>}
+            </DialogTitle>
+            <DialogDescription>
+              {opDialog === 'stock_in' && 'Add stock to a location. Optionally link to a Purchase Order for receiving.'}
+              {opDialog === 'stock_out' && 'Remove stock from a location. A reason is required.'}
+              {opDialog === 'transfer' && 'Move stock from one location to another within the same store.'}
+              {opDialog === 'adjust' && 'Set the counted quantity on hand for a product at a location.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Product</Label>
+              <Select value={opForm.productId} onValueChange={(v) => setOpForm((f) => ({ ...f, productId: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} ({p.sku_code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>{opDialog === 'transfer' ? 'Source Location' : 'Location'}</Label>
+                <Select value={opForm.locationId} onValueChange={(v) => setOpForm((f) => ({ ...f, locationId: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {opDialog === 'transfer' && (
+                <div className="space-y-1.5">
+                  <Label>Destination Location</Label>
+                  <Select
+                    value={opForm.destinationLocationId}
+                    onValueChange={(v) => setOpForm((f) => ({ ...f, destinationLocationId: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations
+                        .filter((loc) => loc.id !== opForm.locationId)
+                        .map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {opDialog === 'adjust' ? (
+              <div className="space-y-1.5">
+                <Label>Counted Quantity On Hand</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 120"
+                  value={opForm.newQty}
+                  onChange={(e) => setOpForm((f) => ({ ...f, newQty: e.target.value }))}
+                />
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="e.g. 10"
+                  value={opForm.qty}
+                  onChange={(e) => setOpForm((f) => ({ ...f, qty: e.target.value }))}
+                />
+              </div>
+            )}
+
+            {opDialog === 'stock_in' && (
+              <div className="space-y-1.5">
+                <Label>Linked Purchase Order (optional)</Label>
+                <Input
+                  value={opForm.poId}
+                  placeholder="PO reference ID"
+                  onChange={(e) => setOpForm((f) => ({ ...f, poId: e.target.value }))}
+                />
+              </div>
+            )}
+
+            {opDialog !== 'transfer' && (
+              <div className="space-y-1.5">
+                <Label>
+                  Reason{opDialog === 'stock_out' ? ' *' : ''}
+                </Label>
+                <Input
+                  placeholder={opDialog === 'stock_out' ? 'e.g. Lost merchandise, damaged goods' : 'Optional reason'}
+                  value={opForm.reason}
+                  onChange={(e) => setOpForm((f) => ({ ...f, reason: e.target.value }))}
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>Notes (optional)</Label>
+              <Input
+                value={opForm.notes}
+                placeholder="Additional context"
+                onChange={(e) => setOpForm((f) => ({ ...f, notes: e.target.value }))}
+              />
+            </div>
+
+            {opError && (
+              <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+                <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                <span>{opError}</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" type="button" onClick={closeOperation} disabled={Boolean(operationPending)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmitOperation}
+              disabled={operationPending}
+              className="gap-2"
+            >
+              {operationPending && <Loader2 className="size-3.5 animate-spin" />}
+              <span>Submit</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Movement History Dialog */}
+      <Dialog open={movementsOpen} onOpenChange={setMovementsOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="size-4" />
+              Stock Movement History
+            </DialogTitle>
+            <DialogDescription>
+              Chronological record of all stock changes across locations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mb-3 flex items-center gap-2">
+            <Select
+              value={movementTypeFilter}
+              onValueChange={(v) => setMovementTypeFilter(v as MovementType | 'all')}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {(Object.keys(movementTypeLabels) as MovementType[]).map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {movementTypeLabels[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-xs"
+              onClick={() => movementsQuery.refetch()}
+              disabled={movementsQuery.isFetching}
+            >
+              <RefreshCw className={`size-3.5 ${movementsQuery.isFetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          <div className="max-h-[55vh] overflow-y-auto rounded-md border">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>When</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
+                  <TableHead>Ref</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {movementsQuery.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-40 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="size-6 animate-spin" />
+                        <p className="text-sm">Loading movements...</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : movements.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-40 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                        <History className="size-8 stroke-[1.5]" />
+                        <p className="font-medium text-foreground">No movements found</p>
+                        <p className="text-xs">Record stock-in, stock-out, transfers, or adjustments to see history.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  movements.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {new Date(m.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={movementBadgeClass[m.type]}>
+                          {movementTypeLabels[m.type]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[180px]">
+                        <div className="truncate text-xs font-medium">{m.product_name ?? m.product_id}</div>
+                        {m.sku_code && <div className="truncate text-[11px] text-muted-foreground">{m.sku_code}</div>}
+                      </TableCell>
+                      <TableCell className="text-xs">{m.location_name ?? '—'}</TableCell>
+                      <TableCell
+                        className={`text-right text-xs font-semibold ${
+                          m.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {m.qty > 0 ? `+${m.qty}` : m.qty}
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {m.qty_after !== null && m.qty_before !== null ? `${m.qty_before} → ${m.qty_after}` : '—'}
+                      </TableCell>
+                      <TableCell className="max-w-[140px]">
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {m.po_id ? `PO ${m.po_id.slice(0, 8)}` : m.transfer_ref ? `TR ${m.transfer_ref.slice(0, 8)}` : m.reason ?? '—'}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

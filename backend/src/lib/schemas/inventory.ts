@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { nonNegativeQtySchema, positiveQtySchema, textSchema, uuidSchema } from './common.js'
-import { stockStatusSchema } from './enums.js'
+import { movementTypeSchema, stockStatusSchema } from './enums.js'
 
 /**
  * Inventory & stock module schemas. Maps to `inventory`, `stock_movements`,
@@ -93,4 +93,14 @@ export const listInventoryQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 })
 export type ListInventoryQuery = z.infer<typeof listInventoryQuerySchema>
+
+// GET /inventory/movements query params
+export const listMovementsQuerySchema = z.object({
+  productId: uuidSchema.optional(),
+  locationId: uuidSchema.optional(),
+  type: movementTypeSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+export type ListMovementsQuery = z.infer<typeof listMovementsQuerySchema>
 

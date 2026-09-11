@@ -16,6 +16,8 @@ import {
   receivePurchaseOrderSchema,
   updatePoStatusSchema,
 } from '../../lib/schemas/purchase-orders.js'
+import { memoryLocations, memoryProductsList } from '../../lib/mock-catalog.js'
+import { memoryInventory, mutateStock } from '../inventory/inventory.store.js'
 
 const router = Router()
 
@@ -91,29 +93,7 @@ interface LocalPoReceiptLine {
   created_at: string
 }
 
-interface LocalInventoryRow {
-  product_id: string
-  location_id: string
-  qty_on_hand: number
-  earliest_expiry_date: string | null
-}
-
-interface LocalSafetyStockRule {
-  product_id: string
-  location_id: string
-  safety_stock: number
-  reorder_point: number
-  target_level: number
-  auto_order_enabled: boolean
-}
-
-// Master references from seed.sql
-const memoryLocations: Record<string, { name: string; code: string; type: 'store' | 'warehouse'; city: string }> = {
-  'a1000000-0000-0000-0000-000000000001': { name: 'Store A — MG Road', code: 'STORE-A', type: 'store', city: 'Mumbai' },
-  'a1000000-0000-0000-0000-000000000002': { name: 'Store B — Andheri', code: 'STORE-B', type: 'store', city: 'Mumbai' },
-  'a1000000-0000-0000-0000-000000000003': { name: 'Store C — Thane', code: 'STORE-C', type: 'store', city: 'Thane' },
-  'a1000000-0000-0000-0000-000000000004': { name: 'Central Warehouse', code: 'WH-CENTRAL', type: 'warehouse', city: 'Mumbai' },
-}
+// Master references live in lib/mock-catalog.ts (shared with products & inventory)
 
 const memorySuppliersList: Record<string, { name: string; code: string; lead_time_days: number; email: string; phone: string }> = {
   'b1000000-0000-0000-0000-000000000001': { name: 'TechDistribute India Pvt. Ltd.', code: 'SUP-TECH', lead_time_days: 5, email: 'rajesh@techdistribute.in', phone: '+91 98200 11001' },
@@ -121,34 +101,6 @@ const memorySuppliersList: Record<string, { name: string; code: string; lead_tim
   'b1000000-0000-0000-0000-000000000003': { name: 'BeverageMart Distributors', code: 'SUP-BEV', lead_time_days: 3, email: 'amit@beveragemart.in', phone: '+91 98200 33003' },
   'b1000000-0000-0000-0000-000000000004': { name: 'CleanCare Supplies', code: 'SUP-CLEAN', lead_time_days: 4, email: 'neha@cleancare.co.in', phone: '+91 98200 44004' },
   'b1000000-0000-0000-0000-000000000005': { name: 'StyleWear Wholesale', code: 'SUP-STYLE', lead_time_days: 7, email: 'ali@stylewear.in', phone: '+91 98200 55005' },
-}
-
-// Exported so the products module can keep this mock catalog in sync
-// (label/data freshness only; purchase-order business logic is unchanged).
-export const memoryProductsList: Record<string, {
-  name: string
-  sku_code: string
-  category: string
-  unit: string
-  cost_price: number
-  sale_price: number
-  default_safety_stock: number
-  default_reorder_point: number
-  default_target_level: number
-  is_perishable: boolean
-  shelf_life_days: number | null
-}> = {
-  'd1000000-0000-0000-0000-000000000001': { name: 'USB-C Charging Cable 1m', sku_code: 'PELEC-001', category: 'Electronics', unit: 'pcs', cost_price: 120, sale_price: 299, default_safety_stock: 15, default_reorder_point: 30, default_target_level: 60, is_perishable: false, shelf_life_days: null },
-  'd1000000-0000-0000-0000-000000000002': { name: 'Wireless Earbuds Pro', sku_code: 'PELEC-002', category: 'Electronics', unit: 'pcs', cost_price: 800, sale_price: 1999, default_safety_stock: 8, default_reorder_point: 15, default_target_level: 30, is_perishable: false, shelf_life_days: null },
-  'd1000000-0000-0000-0000-000000000003': { name: 'Phone Screen Protector', sku_code: 'PELEC-003', category: 'Electronics', unit: 'pcs', cost_price: 40, sale_price: 149, default_safety_stock: 30, default_reorder_point: 60, default_target_level: 120, is_perishable: false, shelf_life_days: null },
-  'd1000000-0000-0000-0000-000000000004': { name: '10000mAh Power Bank', sku_code: 'PELEC-004', category: 'Electronics', unit: 'pcs', cost_price: 450, sale_price: 999, default_safety_stock: 10, default_reorder_point: 20, default_target_level: 40, is_perishable: false, shelf_life_days: null },
-  'd1000000-0000-0000-0000-000000000005': { name: 'Premium Basmati Rice 5kg', sku_code: 'PGROC-001', category: 'Grocery', unit: 'pack', cost_price: 280, sale_price: 450, default_safety_stock: 20, default_reorder_point: 35, default_target_level: 70, is_perishable: false, shelf_life_days: 365 },
-  'd1000000-0000-0000-0000-000000000006': { name: 'Masala Chips Multi-Pack', sku_code: 'PGROC-002', category: 'Grocery', unit: 'pack', cost_price: 80, sale_price: 120, default_safety_stock: 25, default_reorder_point: 50, default_target_level: 100, is_perishable: true, shelf_life_days: 90 },
-  'd1000000-0000-0000-0000-000000000007': { name: 'Whole Wheat Bread 400g', sku_code: 'PGROC-003', category: 'Grocery', unit: 'pack', cost_price: 25, sale_price: 45, default_safety_stock: 15, default_reorder_point: 30, default_target_level: 60, is_perishable: true, shelf_life_days: 5 },
-  'd1000000-0000-0000-0000-000000000008': { name: 'Full Cream Milk 1L', sku_code: 'PGROC-004', category: 'Dairy', unit: 'L', cost_price: 52, sale_price: 68, default_safety_stock: 20, default_reorder_point: 40, default_target_level: 80, is_perishable: true, shelf_life_days: 7 },
-  'd1000000-0000-0000-0000-000000000009': { name: 'Greek Yogurt 400g', sku_code: 'PGROC-005', category: 'Dairy', unit: 'cup', cost_price: 65, sale_price: 95, default_safety_stock: 10, default_reorder_point: 20, default_target_level: 40, is_perishable: true, shelf_life_days: 21 },
-  'd1000000-0000-0000-0000-000000000010': { name: 'Cola 500mL Can (12-pack)', sku_code: 'PBEV-001', category: 'Beverages', unit: 'pack', cost_price: 180, sale_price: 300, default_safety_stock: 15, default_reorder_point: 30, default_target_level: 60, is_perishable: false, shelf_life_days: 180 },
-  'd1000000-0000-0000-0000-000000000014': { name: 'Liquid Hand Soap 500mL', sku_code: 'PCARE-001', category: 'Personal Care', unit: 'bottle', cost_price: 75, sale_price: 129, default_safety_stock: 15, default_reorder_point: 25, default_target_level: 50, is_perishable: false, shelf_life_days: 730 },
 }
 
 // Supplier product mappings (preferred supplier & unit cost)
@@ -170,29 +122,9 @@ const memorySupplierProducts: Array<{
   { supplier_id: 'b1000000-0000-0000-0000-000000000004', product_id: 'd1000000-0000-0000-0000-000000000014', unit_cost: 75, lead_time_override: 4, is_preferred: true },
 ]
 
-// Mutable in-memory inventory store
-const memoryInventory: LocalInventoryRow[] = [
-  // Store A (MG Road)
-  { product_id: 'd1000000-0000-0000-0000-000000000001', location_id: 'a1000000-0000-0000-0000-000000000001', qty_on_hand: 45, earliest_expiry_date: null },
-  { product_id: 'd1000000-0000-0000-0000-000000000002', location_id: 'a1000000-0000-0000-0000-000000000001', qty_on_hand: 12, earliest_expiry_date: null }, // Low stock! reorder_point: 15
-  { product_id: 'd1000000-0000-0000-0000-000000000003', location_id: 'a1000000-0000-0000-0000-000000000001', qty_on_hand: 85, earliest_expiry_date: null },
-  { product_id: 'd1000000-0000-0000-0000-000000000004', location_id: 'a1000000-0000-0000-0000-000000000001', qty_on_hand: 22, earliest_expiry_date: null },
-  { product_id: 'd1000000-0000-0000-0000-000000000007', location_id: 'a1000000-0000-0000-0000-000000000001', qty_on_hand: 18, earliest_expiry_date: '2026-09-15' }, // Low stock! reorder_point: 30
-  // Store B (Andheri)
-  { product_id: 'd1000000-0000-0000-0000-000000000001', location_id: 'a1000000-0000-0000-0000-000000000002', qty_on_hand: 14, earliest_expiry_date: null }, // Low stock! reorder_point: 20
-  { product_id: 'd1000000-0000-0000-0000-000000000002', location_id: 'a1000000-0000-0000-0000-000000000002', qty_on_hand: 12, earliest_expiry_date: null },
-  // Central Warehouse
-  { product_id: 'd1000000-0000-0000-0000-000000000001', location_id: 'a1000000-0000-0000-0000-000000000004', qty_on_hand: 200, earliest_expiry_date: null },
-  { product_id: 'd1000000-0000-0000-0000-000000000002', location_id: 'a1000000-0000-0000-0000-000000000004', qty_on_hand: 80, earliest_expiry_date: null },
-]
-
-// Mutable safety stock rules
-const memorySafetyStockRules: LocalSafetyStockRule[] = [
-  { product_id: 'd1000000-0000-0000-0000-000000000001', location_id: 'a1000000-0000-0000-0000-000000000001', safety_stock: 15, reorder_point: 30, target_level: 60, auto_order_enabled: true },
-  { product_id: 'd1000000-0000-0000-0000-000000000002', location_id: 'a1000000-0000-0000-0000-000000000001', safety_stock: 8, reorder_point: 15, target_level: 30, auto_order_enabled: true },
-  { product_id: 'd1000000-0000-0000-0000-000000000007', location_id: 'a1000000-0000-0000-0000-000000000001', safety_stock: 15, reorder_point: 30, target_level: 60, auto_order_enabled: true },
-  { product_id: 'd1000000-0000-0000-0000-000000000001', location_id: 'a1000000-0000-0000-0000-000000000002', safety_stock: 10, reorder_point: 20, target_level: 50, auto_order_enabled: true },
-]
+// Stock levels & thresholds live in the shared inventory store
+// (modules/inventory/inventory.store.ts) — single source of truth for the
+// stock ledger across PO receiving, sales and inventory operations.
 
 // Seed Purchase Orders
 const memoryPurchaseOrders: LocalPurchaseOrder[] = [
@@ -258,6 +190,14 @@ const memoryPurchaseOrders: LocalPurchaseOrder[] = [
     updated_at: '2026-09-09T08:00:00.000Z',
   },
 ]
+
+/**
+ * Shared lookup for the inventory module: verify an optional PO reference on
+ * stock-in exists without duplicating PO workflow logic here.
+ */
+export function findMemoryPurchaseOrder(id: string): LocalPurchaseOrder | undefined {
+  return memoryPurchaseOrders.find((p) => p.id === id)
+}
 
 const memoryPoLines: LocalPoLine[] = [
   // PO 1 lines (closed)
@@ -781,8 +721,13 @@ router.post(
     )
     const targetLocationId = destinationId || destination_id || locationId || location_id
 
-    // 1. Scan inventory rows
-    let invRows = [...memoryInventory]
+    // 1. Scan inventory rows (shared inventory ledger)
+    let invRows = memoryInventory.map((i) => ({
+      product_id: i.product_id,
+      location_id: i.location_id,
+      qty_on_hand: i.qty_on_hand,
+      earliest_expiry_date: i.earliest_expiry_date,
+    }))
     if (targetLocationId) {
       invRows = invRows.filter((r) => r.location_id === targetLocationId)
     }
@@ -822,12 +767,12 @@ router.post(
       const prod = memoryProductsList[row.product_id]
       if (!prod) continue
 
-      // Look up rule or default reorder point
-      const rule = memorySafetyStockRules.find(
-        (r) => r.product_id === row.product_id && r.location_id === row.location_id,
+      // Look up threshold meta or default reorder point
+      const meta = memoryInventory.find(
+        (i) => i.product_id === row.product_id && i.location_id === row.location_id,
       )
-      const reorderPoint = rule?.reorder_point ?? prod.default_reorder_point
-      const targetLevel = rule?.target_level ?? prod.default_target_level
+      const reorderPoint = meta?.reorder_point ?? prod.default_reorder_point
+      const targetLevel = meta?.target_level ?? prod.default_target_level
 
       // Condition: qty_on_hand <= reorder_point
       if (row.qty_on_hand <= reorderPoint) {
@@ -1156,7 +1101,7 @@ router.post(
     memoryPoReceipts.unshift(receiptRecord)
     memoryPoReceiptLines.push(...receiptLinesToInsert)
 
-    // Update PO lines qty_received and update inventory at destination
+    // Update PO lines qty_received and record stock via the shared inventory service
     for (const rLine of receiptLinesToInsert) {
       const line = poLines.find((l) => l.id === rLine.po_line_id)
       if (line) {
@@ -1164,23 +1109,18 @@ router.post(
         line.updated_at = nowIso
       }
 
-      // Record stock into inventory at destination location
-      const invIdx = memoryInventory.findIndex(
-        (inv) => inv.product_id === rLine.product_id && inv.location_id === po.destination_id,
-      )
-      if (invIdx >= 0) {
-        memoryInventory[invIdx].qty_on_hand += rLine.qty_received
-        if (rLine.earliest_expiry_date) {
-          memoryInventory[invIdx].earliest_expiry_date = rLine.earliest_expiry_date
-        }
-      } else {
-        memoryInventory.push({
-          product_id: rLine.product_id,
-          location_id: po.destination_id,
-          qty_on_hand: rLine.qty_received,
-          earliest_expiry_date: rLine.earliest_expiry_date ?? null,
-        })
-      }
+      await mutateStock({
+        productId: rLine.product_id,
+        locationId: po.destination_id,
+        type: 'po_receipt',
+        qty: rLine.qty_received,
+        poId: id,
+        poLineId: rLine.po_line_id,
+        earliestExpiryDate: rLine.earliest_expiry_date ?? null,
+        actor: req.userId
+          ? { id: req.userId, email: req.email ?? '', role: req.role ?? 'admin' }
+          : undefined,
+      })
     }
 
     // Recompute total received on header

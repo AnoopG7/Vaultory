@@ -1,5 +1,5 @@
 import { memoryInventory } from '../inventory/inventory.store.js'
-import { memoryProductsList } from '../purchase-orders/purchase-orders.routes.js'
+import { memoryProductsList } from '../../lib/mock-catalog.js'
 import { memoryUnits } from '../units/units.store.js'
 
 export interface LocalProduct {

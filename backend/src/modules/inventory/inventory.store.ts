@@ -1,8 +1,10 @@
-import { supabase, supabaseAdmin } from '../../config/index.js'
+import { env, supabase, supabaseAdmin } from '../../config/index.js'
 import { AppError } from '../../middleware/index.js'
 import type { Role } from '../../middleware/auth.js'
 import type { StockStatus } from '../../lib/schemas/enums.js'
 import type { ListInventoryQuery } from '../../lib/schemas/inventory.js'
+import { memoryLocations, memoryProductsList } from '../../lib/mock-catalog.js'
+import { memoryCategories } from '../categories/categories.store.js'
 import { recordAuditLog } from '../users/users.store.js'
 
 const db = supabaseAdmin ?? supabase
@@ -538,5 +540,503 @@ export async function updateThresholds(params: {
     reorderPoint,
     targetLevel: effTarget,
     stockStatus: computedStatus,
+  }
+}
+
+// -----------------------------------------------------------------------------
+// SHARED STOCK / MOVEMENT LEDGER
+// -----------------------------------------------------------------------------
+// Every stock-affecting operation (manual stock-in/out, transfer, adjustment,
+// PO receiving) flows through the helpers below. Real-DB mode mirrors
+// fn_mutate_stock / fn_transfer_stock; the in-memory ledger is always applied
+// so the mock (offline) demo stays consistent. This is the single mechanism the
+// rest of the codebase calls — do not mutate memoryInventory directly elsewhere.
+
+const isMockSupabase =
+  !env.SUPABASE_URL || env.SUPABASE_URL.includes('mock') || env.SUPABASE_URL.includes('localhost')
+
+export type InventoryMovementType =
+  | 'stock_in'
+  | 'stock_out'
+  | 'transfer_out'
+  | 'transfer_in'
+  | 'adjustment'
+  | 'po_receipt'
+  | 'sale'
+  | 'sale_void'
+  | 'sale_return'
+
+export interface LocalStockMovement {
+  id: string
+  product_id: string
+  location_id: string
+  type: InventoryMovementType
+  qty: number
+  qty_before: number | null
+  qty_after: number | null
+  sale_id: string | null
+  po_id: string | null
+  po_line_id: string | null
+  return_id: string | null
+  transfer_ref: string | null
+  reason: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}
+
+/** Immutable (append-only) movement ledger for the memory store. */
+export const memoryMovements: LocalStockMovement[] = []
+
+function isKnownProduct(productId: string): boolean {
+  return memoryInventory.some((i) => i.product_id === productId) || Boolean(memoryProductsList[productId])
+}
+
+function buildInventoryRow(productId: string, locationId: string): LocalInventoryItem {
+  const existing = memoryInventory.find((i) => i.product_id === productId)
+  const existingRow: LocalInventoryItem | undefined = existing
+    ? {
+        ...existing,
+        product_id: productId,
+        location_id: locationId,
+        qty_on_hand: 0,
+        earliest_expiry_date: null,
+        last_movement_at: null,
+        location_name: memoryLocations[locationId]?.name ?? locationId,
+        location_type: memoryLocations[locationId]?.type ?? 'store',
+      }
+    : undefined
+  if (existingRow) return existingRow
+
+  const prod = memoryProductsList[productId]
+  const loc = memoryLocations[locationId]
+  const cat = prod ? memoryCategories.find((c) => c.name === prod.category) : undefined
+
+  return {
+    product_id: productId,
+    location_id: locationId,
+    qty_on_hand: 0,
+    earliest_expiry_date: null,
+    last_movement_at: null,
+    sku_code: prod?.sku_code ?? 'SKU',
+    product_name: prod?.name ?? 'Unknown product',
+    sale_price: prod?.sale_price ?? 0,
+    cost_price: prod?.cost_price ?? 0,
+    product_status: 'active',
+    is_perishable: prod?.is_perishable ?? false,
+    category_id: cat?.id ?? '',
+    category_name: cat?.name ?? prod?.category ?? 'Uncategorized',
+    unit_name: prod?.unit ?? 'units',
+    location_name: loc?.name ?? locationId,
+    location_type: loc?.type ?? 'store',
+    safety_stock: prod?.default_safety_stock ?? 0,
+    reorder_point: prod?.default_reorder_point ?? 0,
+    target_level: prod?.default_target_level ?? 0,
+    auto_order_enabled: false,
+    stock_status: computeStockStatus(0, prod?.default_reorder_point ?? 0, prod?.default_target_level ?? 0),
+  }
+}
+
+interface MemoryMovementParams {
+  productId: string
+  locationId: string
+  type: InventoryMovementType
+  qty: number
+  reason?: string | null
+  notes?: string | null
+  poId?: string | null
+  poLineId?: string | null
+  earliestExpiryDate?: string | null
+  transferRef?: string | null
+  createdBy?: string | null
+}
+
+/**
+ * Apply a mutation to the in-memory ledger: updates qty_on_hand, snapshots the
+ * before/after, records an append-only movement, and refreshes stock status.
+ */
+export function applyMemoryStockMovement(params: MemoryMovementParams): LocalStockMovement {
+  const {
+    productId,
+    locationId,
+    type,
+    qty,
+    reason,
+    notes,
+    poId,
+    poLineId,
+    earliestExpiryDate,
+    transferRef,
+    createdBy,
+  } = params
+
+  const item = memoryInventory.find((i) => i.product_id === productId && i.location_id === locationId)
+  const qtyBefore = item?.qty_on_hand ?? 0
+  const qtyAfter = qtyBefore + qty
+
+  if (qtyAfter < 0) {
+    throw new AppError(
+      409,
+      `Insufficient stock for ${type}: on-hand is ${qtyBefore} but the operation requires ${-qty} more.`,
+      'INSUFFICIENT_STOCK',
+    )
+  }
+
+  let row = item
+  if (!row) {
+    row = buildInventoryRow(productId, locationId)
+    memoryInventory.push(row)
+  }
+  row.qty_on_hand = qtyAfter
+  row.last_movement_at = new Date().toISOString()
+  if (earliestExpiryDate) {
+    row.earliest_expiry_date = earliestExpiryDate
+  }
+  row.stock_status = computeStockStatus(row.qty_on_hand, row.reorder_point, row.target_level)
+
+  const movement: LocalStockMovement = {
+    id: crypto.randomUUID(),
+    product_id: productId,
+    location_id: locationId,
+    type,
+    qty,
+    qty_before: qtyBefore,
+    qty_after: qtyAfter,
+    sale_id: null,
+    po_id: poId ?? null,
+    po_line_id: poLineId ?? null,
+    return_id: null,
+    transfer_ref: transferRef ?? null,
+    reason: reason ?? null,
+    notes: notes ?? null,
+    created_by: createdBy ?? null,
+    created_at: new Date().toISOString(),
+  }
+  memoryMovements.unshift(movement)
+  return movement
+}
+
+export interface StockActor {
+  id?: string | null
+  email?: string | null
+  role?: Role | null
+}
+
+export interface MutateStockParams {
+  productId: string
+  locationId: string
+  type: 'stock_in' | 'stock_out' | 'adjustment' | 'po_receipt'
+  qty: number
+  reason?: string | null
+  notes?: string | null
+  poId?: string | null
+  poLineId?: string | null
+  earliestExpiryDate?: string | null
+  transferRef?: string | null
+  actor?: StockActor
+}
+
+/**
+ * Single stock mutation entry point. Attempts the real DB RPC when Supabase is
+ * configured, then always applies the in-memory ledger so the mock demo is
+ * consistent. Returns the recorded movement.
+ */
+export async function mutateStock(params: MutateStockParams): Promise<LocalStockMovement> {
+  const {
+    productId,
+    locationId,
+    type,
+    qty,
+    reason,
+    notes,
+    poId,
+    poLineId,
+    earliestExpiryDate,
+    transferRef,
+    actor,
+  } = params
+
+  if (!isKnownProduct(productId)) {
+    throw new AppError(404, 'Product not found', 'NOT_FOUND')
+  }
+
+  let persistedMovementId: string | null = null
+
+  if (!isMockSupabase) {
+    try {
+      const { data, error } = await db.rpc('fn_mutate_stock', {
+        p_product_id: productId,
+        p_location_id: locationId,
+        p_type: type,
+        p_qty: qty,
+        p_created_by: actor?.id ?? null,
+        p_reason: reason ?? null,
+        p_notes: notes ?? null,
+        p_sale_id: null,
+        p_sale_line_id: null,
+        p_po_id: poId ?? null,
+        p_po_line_id: poLineId ?? null,
+        p_return_id: null,
+        p_transfer_ref: transferRef ?? null,
+        p_earliest_expiry_date: earliestExpiryDate ?? null,
+      })
+      if (error) {
+        if (/insufficient/i.test(error.message ?? '')) {
+          throw new AppError(409, 'Insufficient stock for this operation', 'INSUFFICIENT_STOCK')
+        }
+        throw error
+      }
+      persistedMovementId = (data as string) ?? null
+    } catch (err) {
+      if (err instanceof AppError) throw err
+      // Fall back to the in-memory ledger
+    }
+  }
+
+  const movement = applyMemoryStockMovement({
+    productId,
+    locationId,
+    type,
+    qty,
+    reason,
+    notes,
+    poId,
+    poLineId,
+    earliestExpiryDate,
+    transferRef,
+    createdBy: actor?.id ?? null,
+  })
+  if (persistedMovementId) {
+    movement.id = persistedMovementId
+  }
+
+  await recordAuditLog({
+    actorId: actor?.id ?? null,
+    actorEmail: actor?.email ?? null,
+    actorRole: actor?.role ?? null,
+    action: type === 'po_receipt' ? 'stock_in' : type === 'adjustment' ? 'stock_adjustment' : type,
+    entity: 'inventory',
+    entityId: `${productId}::${locationId}`,
+    detail: {
+      location_id: locationId,
+      type,
+      qty,
+      qty_before: movement.qty_before,
+      qty_after: movement.qty_after,
+      po_id: poId ?? null,
+      reason: reason ?? null,
+      persisted_in_db: Boolean(persistedMovementId),
+    },
+  })
+
+  return movement
+}
+
+export interface TransferStockParams {
+  productId: string
+  sourceLocationId: string
+  destinationLocationId: string
+  qty: number
+  notes?: string | null
+  actor?: StockActor
+}
+
+/** Atomic transfer: source out (negative) + destination in (positive), paired by transfer_ref. */
+export async function transferStock(params: TransferStockParams): Promise<{
+  transfer_ref: string
+  source_movement_id: string
+  dest_movement_id: string
+}> {
+  const { productId, sourceLocationId, destinationLocationId, qty, notes, actor } = params
+
+  if (sourceLocationId === destinationLocationId) {
+    throw new AppError(400, 'Source and destination locations must differ', 'INVALID_TRANSFER')
+  }
+  if (qty <= 0) {
+    throw new AppError(400, 'Transfer quantity must be greater than 0', 'INVALID_QUANTITY')
+  }
+  if (!isKnownProduct(productId)) {
+    throw new AppError(404, 'Product not found', 'NOT_FOUND')
+  }
+
+  let persistedRef: string | null = null
+  if (!isMockSupabase) {
+    try {
+      const { data, error } = await db.rpc('fn_transfer_stock', {
+        p_product_id: productId,
+        p_source_loc_id: sourceLocationId,
+        p_dest_loc_id: destinationLocationId,
+        p_qty: qty,
+        p_created_by: actor?.id ?? null,
+        p_notes: notes ?? null,
+      })
+      if (error) {
+        if (/insufficient/i.test(error.message ?? '')) {
+          throw new AppError(409, 'Insufficient stock for this transfer', 'INSUFFICIENT_STOCK')
+        }
+        throw error
+      }
+      persistedRef = (data as string) ?? null
+    } catch (err) {
+      if (err instanceof AppError) throw err
+      // Fall back to the in-memory ledger
+    }
+  }
+
+  const transferRef = persistedRef ?? crypto.randomUUID()
+  const sourceMv = applyMemoryStockMovement({
+    productId,
+    locationId: sourceLocationId,
+    type: 'transfer_out',
+    qty: -qty,
+    notes,
+    transferRef,
+    createdBy: actor?.id ?? null,
+  })
+  const destMv = applyMemoryStockMovement({
+    productId,
+    locationId: destinationLocationId,
+    type: 'transfer_in',
+    qty,
+    notes,
+    transferRef,
+    createdBy: actor?.id ?? null,
+  })
+
+  await recordAuditLog({
+    actorId: actor?.id ?? null,
+    actorEmail: actor?.email ?? null,
+    actorRole: actor?.role ?? null,
+    action: 'stock_transfer',
+    entity: 'inventory',
+    entityId: `${productId}::${sourceLocationId}->${destinationLocationId}`,
+    detail: {
+      product_id: productId,
+      source_location_id: sourceLocationId,
+      destination_location_id: destinationLocationId,
+      qty,
+      transfer_ref: transferRef,
+      persisted_in_db: Boolean(persistedRef),
+    },
+  })
+
+  return { transfer_ref: transferRef, source_movement_id: sourceMv.id, dest_movement_id: destMv.id }
+}
+
+export interface ListMovementsQuery {
+  productId?: string
+  locationId?: string
+  type?: InventoryMovementType
+  limit?: number
+  offset?: number
+}
+
+function enrichMovement(m: LocalStockMovement): LocalStockMovement & {
+  product_name: string
+  sku_code: string
+  location_name: string
+} {
+  const prod = memoryProductsList[m.product_id]
+  const stockRow = memoryInventory.find((i) => i.product_id === m.product_id)
+  return {
+    ...m,
+    product_name: prod?.name ?? stockRow?.product_name ?? m.product_id,
+    sku_code: prod?.sku_code ?? stockRow?.sku_code ?? '—',
+    location_name: memoryLocations[m.location_id]?.name ?? m.location_id,
+  }
+}
+
+/** List stock movements (newest first) with product/location labels. */
+export async function queryMovements(
+  query: ListMovementsQuery,
+  callerRole?: Role,
+  callerStoreId?: string | null,
+): Promise<{ movements: LocalStockMovement[]; total: number; limit: number; offset: number }> {
+  const limit = query.limit ?? 50
+  const offset = query.offset ?? 0
+
+  try {
+    if (!isMockSupabase) {
+      let q = db
+        .from('stock_movements')
+        .select('*, products(name, sku_code), locations(name)', { count: 'exact' })
+
+      if (callerRole === 'store_staff' && callerStoreId) {
+        const { data: storeLocs } = await db
+          .from('locations')
+          .select('id')
+          .eq('store_id', callerStoreId)
+        const locIds = (storeLocs ?? []).map((l) => l.id as string)
+        if (locIds.length) {
+          q = q.in('location_id', locIds)
+        }
+      }
+
+      if (query.productId) {
+        q = q.eq('product_id', query.productId)
+      }
+      if (query.locationId) {
+        q = q.eq('location_id', query.locationId)
+      }
+      if (query.type) {
+        q = q.eq('type', query.type)
+      }
+
+      q = q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
+
+      const { data, count, error } = await q
+      if (!error && data && data.length > 0) {
+        const movements: LocalStockMovement[] = data.map((row) => {
+          const prodJoin = (row.products as { name?: string; sku_code?: string } | null) ?? null
+          const locJoin = (row.locations as { name?: string } | null) ?? null
+          return {
+            id: String(row.id),
+            product_id: String(row.product_id),
+            location_id: String(row.location_id),
+            type: row.type as InventoryMovementType,
+            qty: Number(row.qty ?? 0),
+            qty_before: row.qty_before != null ? Number(row.qty_before) : null,
+            qty_after: row.qty_after != null ? Number(row.qty_after) : null,
+            sale_id: (row.sale_id as string) ?? null,
+            po_id: (row.po_id as string) ?? null,
+            po_line_id: (row.po_line_id as string) ?? null,
+            return_id: (row.return_id as string) ?? null,
+            transfer_ref: (row.transfer_ref as string) ?? null,
+            reason: (row.reason as string) ?? null,
+            notes: (row.notes as string) ?? null,
+            created_by: (row.created_by as string) ?? null,
+            created_at: row.created_at as string,
+            product_name: prodJoin?.name ?? String(row.product_id),
+            sku_code: prodJoin?.sku_code ?? '—',
+            location_name: locJoin?.name ?? String(row.location_id),
+          }
+        })
+        return { movements, total: count ?? movements.length, limit, offset }
+      }
+    }
+  } catch {
+    // Fall back to in-memory ledger
+  }
+
+  let filtered = [...memoryMovements]
+
+  if (query.productId) {
+    filtered = filtered.filter((m) => m.product_id === query.productId)
+  }
+  if (query.locationId) {
+    filtered = filtered.filter((m) => m.location_id === query.locationId)
+  }
+  if (query.type) {
+    filtered = filtered.filter((m) => m.type === query.type)
+  }
+
+  filtered.sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+  const paged = filtered.slice(offset, offset + limit)
+
+  return {
+    movements: paged.map(enrichMovement),
+    total: filtered.length,
+    limit,
+    offset,
   }
 }

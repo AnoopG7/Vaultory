@@ -5,10 +5,14 @@ import { asyncHandler } from '../../middleware/index.js'
 
 const router = Router()
 
+const isMockSupabase =
+  !env.SUPABASE_URL || env.SUPABASE_URL.includes('mock') || env.SUPABASE_URL.includes('localhost')
+
 /**
  * Health check used by Render (uptime monitoring) and integration tests.
  * Verifies the service is up and can reach Supabase (Postgres) + returns
- * whether the AI (Groq) integration is configured.
+ * whether the AI (Groq) integration is configured. In offline/mock mode the
+ * Supabase round-trip is skipped so the probe responds immediately with 200.
  */
 router.get(
   '/health',
@@ -18,20 +22,24 @@ router.get(
     let db = 'ok'
     let dbError: string | null = null
     try {
-      const { error } = await supabase.from('health_check').select('id').limit(1)
-      if (error) {
-        // Table may not exist yet - still counts as "reachable" if the query runs.
-        if (error.code !== '42P01') {
-          db = 'error'
-          dbError = error.message
+      if (!isMockSupabase) {
+        const { error } = await supabase.from('health_check').select('id').limit(1)
+        if (error) {
+          // Table may not exist yet - still counts as "reachable" if the query runs.
+          if (error.code !== '42P01') {
+            db = 'error'
+            dbError = error.message
+          }
         }
+      } else {
+        db = 'mock'
       }
     } catch (e) {
       db = 'error'
       dbError = (e as Error).message
     }
 
-    const healthy = db === 'ok'
+    const healthy = db === 'ok' || db === 'mock'
     res.status(healthy ? 200 : 503).json({
       status: healthy ? 'ok' : 'degraded',
       service: 'vaultory-backend',
@@ -40,6 +48,7 @@ router.get(
       environment: env.NODE_ENV,
       database: {
         status: db,
+        mock: isMockSupabase,
         ...(dbError ? { error: dbError } : {}),
       },
       ai: {
