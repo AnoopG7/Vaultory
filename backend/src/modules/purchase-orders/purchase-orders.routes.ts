@@ -210,7 +210,9 @@ const memorySuppliersList: Record<string, { name: string; code: string; lead_tim
   'b1000000-0000-0000-0000-000000000005': { name: 'StyleWear Wholesale', code: 'SUP-STYLE', lead_time_days: 7, email: 'ali@stylewear.in', phone: '+91 98200 55005' },
 }
 
-const memoryProductsList: Record<string, {
+// Exported so the products module can keep this mock catalog in sync
+// (label/data freshness only; purchase-order business logic is unchanged).
+export const memoryProductsList: Record<string, {
   name: string
   sku_code: string
   category: string

@@ -16,17 +16,17 @@ export const createProductSchema = z.object({
   unitId: uuidSchema,
   cost_price: nonNegativeMoneySchema, // MASKED field
   sale_price: nonNegativeMoneySchema,
-  default_safety_stock: moneySchema.min(0).default(0),
-  default_reorder_point: moneySchema.min(0).default(0),
-  default_target_level: moneySchema.min(0).default(0),
-  is_perishable: z.boolean().default(false),
+  default_safety_stock: moneySchema.min(0),
+  default_reorder_point: moneySchema.min(0),
+  default_target_level: moneySchema.min(0),
+  is_perishable: z.boolean().optional(),
   shelf_life_days: z.coerce.number().int().positive().optional(), // required if perishable
   image_url: z.string().trim().url().nullish(),
   barcode: z.string().trim().max(50).optional(),
   weight: z.coerce.number().min(0).optional(),
   weight_unit: z.string().trim().max(10).optional(),
   notes: z.string().trim().optional(),
-  status: entityStatusSchema.default('active'),
+  status: entityStatusSchema.optional(),
 })
 export type CreateProductInput = z.infer<typeof createProductSchema>
 
@@ -46,3 +46,19 @@ export type Product = z.infer<typeof productSchema>
 export const setProductStatusSchema = z.object({
   status: entityStatusSchema,
 })
+
+// GET /api/products — list query (search, category/status filter, pagination).
+export const listProductsQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  categoryId: uuidSchema.nullish(),
+  status: z.enum(['active', 'archived', 'all']).optional().default('all'),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+})
+export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>
+
+// /api/products/:id param
+export const productIdParamSchema = z.object({
+  id: uuidSchema,
+})
+export type ProductIdParam = z.infer<typeof productIdParamSchema>

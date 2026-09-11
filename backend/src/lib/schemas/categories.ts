@@ -29,3 +29,16 @@ export const categorySchema = z.object({
   updated_at: z.string(),
 })
 export type Category = z.infer<typeof categorySchema>
+
+// GET /api/categories — list query (status filter, tree vs flat).
+export const listCategoriesQuerySchema = z.object({
+  status: z.enum(['active', 'archived', 'all']).optional().default('all'),
+  tree: z.enum(['true', 'false']).optional().default('false'),
+})
+export type ListCategoriesQuery = z.infer<typeof listCategoriesQuerySchema>
+
+// /api/categories/:id param
+export const categoryIdParamSchema = z.object({
+  id: uuidSchema,
+})
+export type CategoryIdParam = z.infer<typeof categoryIdParamSchema>
