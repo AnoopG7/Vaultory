@@ -28,6 +28,27 @@ function assertCanManagePo(role: string | undefined): void {
   }
 }
 
+// Returns the location IDs belonging to a store. Used to scope `store_staff`
+// PO reads/writes to their own store (a PO's store is its destination).
+async function getStoreLocationIds(storeId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('locations')
+    .select('id')
+    .eq('store_id', storeId)
+  if (!data) {
+    const fallback = STORE_LOCATION_MAP[storeId]
+    return fallback ? [fallback] : []
+  }
+  return data.map((l) => l.id as string)
+}
+
+// All locations across the seeded stores (mirrors STORE_LOCATIONS in sales).
+const STORE_LOCATION_MAP: Record<string, string> = {
+  'e1000000-0000-0000-0000-000000000001': 'a1000000-0000-0000-0000-000000000001',
+  'e1000000-0000-0000-0000-000000000002': 'a1000000-0000-0000-0000-000000000002',
+  'e1000000-0000-0000-0000-000000000003': 'a1000000-0000-0000-0000-000000000003',
+}
+
 // DB-backed deployments (real Supabase URL): every operation below targets the
 // DB directly. The in-memory stores are only the fallback for mock/local URLs.
 const isMockSupabase = !env.SUPABASE_URL || env.SUPABASE_URL.includes('mock') || env.SUPABASE_URL.includes('localhost')
@@ -527,6 +548,13 @@ router.get(
     const search = query.search?.toLowerCase().trim()
     const { limit, offset, source } = query
 
+    // Store-scoped roles (store_staff / sales_personnel) see only POs destined
+    // for their own store.
+    let storeLocIds: string[] | null = null
+    if (req.role === 'store_staff' || req.role === 'sales_personnel') {
+      storeLocIds = req.storeId ? await getStoreLocationIds(req.storeId) : []
+    }
+
     try {
       let sbQuery = supabase
         .from('purchase_orders')
@@ -538,6 +566,28 @@ router.get(
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+
+      if (storeLocIds !== null) {
+        if (storeLocIds.length === 0) {
+          return res.json({
+            purchase_orders: [],
+            total: 0,
+            limit,
+            offset,
+            summary: {
+              total_pos: 0,
+              draft: 0,
+              sent: 0,
+              partially_received: 0,
+              received: 0,
+              closed: 0,
+              cancelled: 0,
+              total_spend: 0,
+            },
+          })
+        }
+        sbQuery = sbQuery.in('destination_id', storeLocIds)
+      }
 
       if (status) {
         sbQuery = sbQuery.eq('status', status)
@@ -568,9 +618,13 @@ router.get(
         }))
 
         // Summary metrics across all POs (DB-backed, not memory).
-        const { data: allRows, error: summaryErr } = await supabase
+        let summaryQuery = supabase
           .from('purchase_orders')
           .select('status, total_cost')
+        if (storeLocIds !== null) {
+          summaryQuery = summaryQuery.in('destination_id', storeLocIds)
+        }
+        const { data: allRows, error: summaryErr } = await summaryQuery
         const rows = summaryErr ? [] : (allRows ?? [])
         const summary = {
           total_pos: rows.length,
@@ -626,19 +680,25 @@ router.get(
     // Sort descending by created_at
     filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
+    // Store staff see only their own store's POs in the memory fallback too.
+    if (storeLocIds !== null) {
+      filtered = filtered.filter((p) => storeLocIds.includes(p.destination_id))
+    }
+
     const total = filtered.length
     const paginated = filtered.slice(offset, offset + limit).map(enrichPurchaseOrder)
 
     // Summary metrics across all POs
+    const scopedMemoryRows = storeLocIds !== null ? filtered : memoryPurchaseOrders
     const summary = {
-      total_pos: memoryPurchaseOrders.length,
-      draft: memoryPurchaseOrders.filter((p) => p.status === 'draft').length,
-      sent: memoryPurchaseOrders.filter((p) => p.status === 'sent').length,
-      partially_received: memoryPurchaseOrders.filter((p) => p.status === 'partially_received').length,
-      received: memoryPurchaseOrders.filter((p) => p.status === 'received').length,
-      closed: memoryPurchaseOrders.filter((p) => p.status === 'closed').length,
-      cancelled: memoryPurchaseOrders.filter((p) => p.status === 'cancelled').length,
-      total_spend: memoryPurchaseOrders.reduce((acc, p) => acc + (p.status !== 'cancelled' ? p.total_cost : 0), 0),
+      total_pos: scopedMemoryRows.length,
+      draft: scopedMemoryRows.filter((p) => p.status === 'draft').length,
+      sent: scopedMemoryRows.filter((p) => p.status === 'sent').length,
+      partially_received: scopedMemoryRows.filter((p) => p.status === 'partially_received').length,
+      received: scopedMemoryRows.filter((p) => p.status === 'received').length,
+      closed: scopedMemoryRows.filter((p) => p.status === 'closed').length,
+      cancelled: scopedMemoryRows.filter((p) => p.status === 'cancelled').length,
+      total_spend: scopedMemoryRows.reduce((acc, p) => acc + (p.status !== 'cancelled' ? p.total_cost : 0), 0),
     }
 
     res.json({
@@ -661,6 +721,12 @@ router.get(
   asyncHandler(async (req, res) => {
     const { id } = validated(req, 'params', poIdParamSchema)
 
+    // Store-scoped roles can only open POs destined for their own store.
+    let allowedDestinationIds: string[] | null = null
+    if (req.role === 'store_staff' || req.role === 'sales_personnel') {
+      allowedDestinationIds = req.storeId ? await getStoreLocationIds(req.storeId) : []
+    }
+
     try {
       const { data: po, error } = await supabase
         .from('purchase_orders')
@@ -674,6 +740,12 @@ router.get(
         .maybeSingle()
 
       if (!error && po) {
+        if (
+          allowedDestinationIds !== null &&
+          !allowedDestinationIds.includes(po.destination_id as string)
+        ) {
+          throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
+        }
         const receiptsRes = await supabase
           .from('po_receipts')
           .select('*, po_receipt_lines!fk_prl_receipt_po(*)')
@@ -697,6 +769,13 @@ router.get(
     // In-memory fallback
     const po = memoryPurchaseOrders.find((p) => p.id === id)
     if (!po) {
+      throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
+    }
+
+    if (
+      allowedDestinationIds !== null &&
+      !allowedDestinationIds.includes(po.destination_id)
+    ) {
       throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
     }
 
