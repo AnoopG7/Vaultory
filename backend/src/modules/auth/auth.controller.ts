@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { supabase, supabaseAdmin } from '../../config/index.js'
+import { supabase, supabaseAnon, supabaseAdmin } from '../../config/index.js'
 import { isProd } from '../../config/env.js'
 import { AppError } from '../../middleware/index.js'
 import type { Role } from '../../middleware/auth.js'
@@ -109,7 +109,7 @@ export async function handleSignin(req: Request, res: Response) {
   let expiresAt: number | null = null
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({
       email: normEmail,
       password,
     })
@@ -160,7 +160,7 @@ export async function handleSignin(req: Request, res: Response) {
 export async function handleOtp(req: Request, res: Response) {
   const email = (req.body as { email: string }).email.trim().toLowerCase()
   const origin = req.headers.origin ?? ''
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await supabaseAnon.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: `${origin}/auth` },
   })
@@ -175,7 +175,7 @@ export async function handleOtp(req: Request, res: Response) {
  */
 export async function handleVerifyOtp(req: Request, res: Response) {
   const { email, token } = req.body as VerifyOtpInput
-  const { data, error } = await supabase.auth.verifyOtp({
+  const { data, error } = await supabaseAnon.auth.verifyOtp({
     email: email.trim().toLowerCase(),
     token,
     type: 'email',
@@ -205,7 +205,7 @@ export async function handleVerifyOtp(req: Request, res: Response) {
 export async function handleForgotPassword(req: Request, res: Response) {
   const email = (req.body as { email: string }).email.trim().toLowerCase()
   const origin = req.headers.origin ?? ''
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabaseAnon.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/reset-password`,
   })
   if (error) {
@@ -227,7 +227,7 @@ export async function handleResetPassword(req: Request, res: Response) {
   // Verify the recovery token_hash (forwarded from the custom reset-email link,
   // see Docs/Implementation_Plan.md "post-deployment"). Establishing a session
   // here is unnecessary — the service-role client updates the password directly.
-  const { data, error } = await supabase.auth.verifyOtp({
+  const { data, error } = await supabaseAnon.auth.verifyOtp({
     token_hash: token,
     type: 'recovery',
   })

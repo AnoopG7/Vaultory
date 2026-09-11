@@ -293,9 +293,19 @@ export async function createSaleTransaction(
   // yet, so chk_sale_total demands total = subtotal - discount = 0); discount
   // and its recompute are applied via UPDATE only after the lines exist.
   if (!isMockSupabase) {
+    // Allocate the next sale number from the DB's own sequence (the
+    // generate_sale_number() helper is exposed as a PostgREST RPC). Passing it
+    // explicitly keeps inserts working even where the sales_assign_sale_number
+    // trigger is not (yet) installed.
+    const { data: nextSaleNumber, error: seqError } = await supabase.rpc('generate_sale_number')
+    if (seqError || !nextSaleNumber) {
+      throw new AppError(500, `Failed to allocate sale number: ${seqError?.message ?? 'no number returned'}`, 'DB_ERROR')
+    }
+
     const { data: dbSale, error: saleError } = await supabase
       .from('sales')
       .insert({
+        sale_number: String(nextSaleNumber),
         store_id: storeId,
         sale_datetime: now,
         discount: 0,
