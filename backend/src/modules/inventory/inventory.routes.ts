@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { supabase } from '../../config/index.js'
 import {
   AppError,
   asyncHandler,
@@ -51,7 +52,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const productId = String(req.params.productId)
     const locationId = String(req.params.locationId)
-    const item = await getInventoryItem(productId, locationId)
+    const item = await getInventoryItem(productId, locationId, req.role)
     if (!item) {
       throw new AppError(404, 'Inventory record not found', 'NOT_FOUND')
     }
@@ -90,10 +91,26 @@ router.patch(
       )
     }
 
+    if (targetLevel !== undefined && isNaN(targetLevel)) {
+      throw new AppError(
+        400,
+        'Target level must be a valid number',
+        'INVALID_STOCK_LEVELS'
+      )
+    }
+
     if (safetyStock < 0 || reorderPoint < 0) {
       throw new AppError(
         400,
         'Safety stock and reorder point cannot be negative',
+        'INVALID_STOCK_LEVELS'
+      )
+    }
+
+    if (targetLevel !== undefined && targetLevel < 0) {
+      throw new AppError(
+        400,
+        'Target level cannot be negative',
         'INVALID_STOCK_LEVELS'
       )
     }
@@ -104,6 +121,26 @@ router.patch(
         'Reorder point cannot be less than safety stock',
         'INVALID_STOCK_LEVELS'
       )
+    }
+
+    if (targetLevel !== undefined && targetLevel < reorderPoint) {
+      throw new AppError(
+        400,
+        'Target level cannot be less than reorder point',
+        'INVALID_STOCK_LEVELS'
+      )
+    }
+
+    if (req.role === 'store_staff' && req.storeId && locationId) {
+      const { data: loc } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('id', locationId)
+        .eq('store_id', req.storeId)
+        .maybeSingle()
+      if (!loc) {
+        throw new AppError(403, 'Location does not belong to your store', 'FORBIDDEN')
+      }
     }
 
     const updated = await updateThresholds({
@@ -165,10 +202,26 @@ router.put(
       )
     }
 
+    if (targetLevel !== undefined && isNaN(targetLevel)) {
+      throw new AppError(
+        400,
+        'Target level must be a valid number',
+        'INVALID_STOCK_LEVELS'
+      )
+    }
+
     if (safetyStock < 0 || reorderPoint < 0) {
       throw new AppError(
         400,
         'Safety stock and reorder point cannot be negative',
+        'INVALID_STOCK_LEVELS'
+      )
+    }
+
+    if (targetLevel !== undefined && targetLevel < 0) {
+      throw new AppError(
+        400,
+        'Target level cannot be negative',
         'INVALID_STOCK_LEVELS'
       )
     }
@@ -179,6 +232,26 @@ router.put(
         'Reorder point cannot be less than safety stock',
         'INVALID_STOCK_LEVELS'
       )
+    }
+
+    if (targetLevel !== undefined && targetLevel < reorderPoint) {
+      throw new AppError(
+        400,
+        'Target level cannot be less than reorder point',
+        'INVALID_STOCK_LEVELS'
+      )
+    }
+
+    if (req.role === 'store_staff' && req.storeId && effLocationId) {
+      const { data: loc } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('id', effLocationId)
+        .eq('store_id', req.storeId)
+        .maybeSingle()
+      if (!loc) {
+        throw new AppError(403, 'Location does not belong to your store', 'FORBIDDEN')
+      }
     }
 
     const updated = await updateThresholds({

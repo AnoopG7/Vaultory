@@ -155,11 +155,18 @@ router.get(
     start.setUTCHours(0, 0, 0, 0)
     start.setUTCDate(start.getUTCDate() - (days - 1))
 
-    const { data, error } = await supabase
+    let q = supabase
       .from('sales')
       .select('sale_datetime, total')
       .eq('status', 'active')
       .gte('sale_datetime', start.toISOString())
+
+    // Restrict sales personnel / staff to their store.
+    if ((req.role === 'store_staff' || req.role === 'sales_personnel') && req.storeId) {
+      q = q.eq('store_id', req.storeId)
+    }
+
+    const { data, error } = await q
     if (error) throw new AppError(500, 'Failed to load revenue trend', 'DB_ERROR')
 
     // Bucket into per-day totals keyed by YYYY-MM-DD (UTC).

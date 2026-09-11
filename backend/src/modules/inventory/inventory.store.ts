@@ -312,7 +312,8 @@ export async function queryInventory(
  */
 export async function getInventoryItem(
   productId: string,
-  locationId?: string | null
+  locationId?: string | null,
+  callerRole?: Role
 ): Promise<LocalInventoryItem | null> {
   try {
     let q = db.from('inventory_status').select('*').eq('product_id', productId)
@@ -330,7 +331,7 @@ export async function getInventoryItem(
         sku_code: data.sku_code,
         product_name: data.product_name,
         sale_price: Number(data.sale_price ?? 0),
-        cost_price: Number(data.cost_price ?? 0),
+        cost_price: callerRole === 'admin' ? Number(data.cost_price ?? 0) : 0,
         product_status: data.product_status ?? 'active',
         is_perishable: Boolean(data.is_perishable),
         category_id: data.category_id,
