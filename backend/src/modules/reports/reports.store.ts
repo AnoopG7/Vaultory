@@ -1,8 +1,27 @@
 import { env, supabase } from '../../config/index.js'
+import { AppError } from '../../middleware/index.js'
 import { memorySales, memorySaleLines } from '../sales/sales.store.js'
 import { memoryInventory } from '../inventory/inventory.store.js'
 
 const isMockSupabase = !env.SUPABASE_URL || env.SUPABASE_URL.includes('mock') || env.SUPABASE_URL.includes('localhost')
+
+function round2(n: number): number {
+  return Number(n.toFixed(2))
+}
+
+interface DbSaleRow {
+  id: string
+  store_id: string
+  sale_datetime: string
+  total: string | number
+  total_qty: string | number
+}
+interface DbSaleLineRow {
+  product_id: string
+  qty: string | number
+  line_total: string | number
+  products?: { name?: string; sku_code?: string }
+}
 
 export interface StoreMeta {
   id: string
@@ -139,7 +158,10 @@ export async function getDailySalesReport(params: {
       if (params.productId) q = q.eq('product_id', params.productId)
 
       const { data, error } = await q
-      if (!error && data) {
+      if (error) {
+        throw new AppError(500, `Failed to load daily sales report: ${error.message}`, 'DB_ERROR')
+      }
+      if (data) {
         const items: DailyReportItem[] = data.map((r) => ({
           store_id: r.store_id,
           store_name: r.store_name,
@@ -164,8 +186,9 @@ export async function getDailySalesReport(params: {
           },
         }
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      if (err instanceof AppError) throw err
+      throw new AppError(500, `Failed to load daily sales report: ${(err as Error).message}`, 'DB_ERROR')
     }
   }
 
@@ -267,6 +290,79 @@ export async function getQuarterlySalesReport(params: {
     }
   })
 
+  // DB-backed computation (real deployment). In-memory fallback below is mock only.
+  if (!isMockSupabase) {
+    let q = supabase
+      .from('sales')
+      .select('id, store_id, sale_datetime, total, total_qty')
+      .gte('sale_datetime', fromDate)
+      .lte('sale_datetime', toDate)
+      .eq('status', 'active')
+    if (params.storeId) q = q.eq('store_id', params.storeId)
+    const { data, error } = await q
+    if (error) {
+      throw new AppError(500, `Failed to load quarterly sales report: ${error.message}`, 'DB_ERROR')
+    }
+
+    const salesRows = (data ?? []) as DbSaleRow[]
+    let prodLines: DbSaleLineRow[] = []
+    const saleIds = salesRows.map((s) => s.id)
+    if (saleIds.length > 0) {
+      let lq = supabase
+        .from('sale_lines')
+        .select('product_id, qty, line_total, products(name, sku_code)')
+        .in('sale_id', saleIds)
+      if (params.productId) lq = lq.eq('product_id', params.productId)
+      const { data: lines, error: lErr } = await lq
+      if (lErr) {
+        throw new AppError(500, `Failed to load quarterly sale lines: ${lErr.message}`, 'DB_ERROR')
+      }
+      prodLines = (lines ?? []) as DbSaleLineRow[]
+    }
+
+    for (const s of salesRows) {
+      const monthKey = s.sale_datetime.substring(0, 7)
+      const mItem = monthsInQuarter.find((m) => m.month === monthKey)
+      if (mItem) {
+        mItem.orders_count += 1
+        mItem.sales_value = round2(mItem.sales_value + Number(s.total))
+        mItem.units_sold += Number(s.total_qty)
+      }
+    }
+
+    const prodMap = new Map<string, ProductBreakdownItem>()
+    for (const l of prodLines) {
+      if (l.product_id === null) continue
+      if (!prodMap.has(l.product_id)) {
+        prodMap.set(l.product_id, {
+          product_id: l.product_id,
+          product_name: l.products?.name ?? 'Product',
+          sku_code: l.products?.sku_code ?? 'SKU',
+          units_sold: 0,
+          sales_value: 0,
+        })
+      }
+      const pItem = prodMap.get(l.product_id)!
+      pItem.units_sold += Number(l.qty)
+      pItem.sales_value = round2(pItem.sales_value + Number(l.line_total))
+    }
+
+    const totalUnits = monthsInQuarter.reduce((acc, m) => acc + m.units_sold, 0)
+    const totalValue = round2(monthsInQuarter.reduce((acc, m) => acc + m.sales_value, 0))
+
+    return {
+      quarter: targetQuarter,
+      date_range: { from: fromDate.split('T')[0], to: toDate.split('T')[0] },
+      monthly_breakdown: monthsInQuarter,
+      product_breakdown: Array.from(prodMap.values()).sort((a, b) => b.sales_value - a.sales_value),
+      summary: {
+        total_units_sold: totalUnits,
+        total_sales_value: totalValue,
+        orders_count: salesRows.length,
+      },
+    }
+  }
+
   // Filter sales
   const sales = memorySales.filter(
     (s) =>
@@ -347,6 +443,47 @@ export async function getYearlySalesReport(params: {
     orders_count: 0,
   }))
 
+  // DB-backed computation (real deployment). In-memory fallback below is mock only.
+  if (!isMockSupabase) {
+    let q = supabase
+      .from('sales')
+      .select('id, store_id, sale_datetime, total, total_qty')
+      .gte('sale_datetime', fromDate)
+      .lte('sale_datetime', toDate)
+      .eq('status', 'active')
+    if (params.storeId) q = q.eq('store_id', params.storeId)
+    const { data, error } = await q
+    if (error) {
+      throw new AppError(500, `Failed to load yearly sales report: ${error.message}`, 'DB_ERROR')
+    }
+
+    const salesRows = (data ?? []) as DbSaleRow[]
+    for (const s of salesRows) {
+      const monthKey = s.sale_datetime.substring(0, 7)
+      const mItem = months.find((m) => m.month === monthKey)
+      if (mItem) {
+        mItem.orders_count += 1
+        mItem.sales_value = round2(mItem.sales_value + Number(s.total))
+        mItem.units_sold += Number(s.total_qty)
+      }
+    }
+
+    const totalUnits = months.reduce((acc, m) => acc + m.units_sold, 0)
+    const totalValue = round2(months.reduce((acc, m) => acc + m.sales_value, 0))
+    const avgMonthly = round2(totalValue / 12)
+
+    return {
+      year: targetYear,
+      monthly_breakdown: months,
+      summary: {
+        total_units_sold: totalUnits,
+        total_sales_value: totalValue,
+        orders_count: salesRows.length,
+        average_monthly_sales: avgMonthly,
+      },
+    }
+  }
+
   const sales = memorySales.filter(
     (s) =>
       s.status === 'active' &&
@@ -389,6 +526,75 @@ export async function getStorePerformanceReport(params: {
   from?: string
   to?: string
 }): Promise<StorePerformanceResponse> {
+  // DB-backed computation (real deployment). In-memory fallback below is mock only.
+  if (!isMockSupabase) {
+    const { data: storeRows, error: storeErr } = await supabase
+      .from('stores')
+      .select('id, name, code, city')
+    if (storeErr) {
+      throw new AppError(500, `Failed to load stores: ${storeErr.message}`, 'DB_ERROR')
+    }
+
+    let q = supabase
+      .from('sales')
+      .select('store_id, sale_datetime, total, total_qty')
+      .eq('status', 'active')
+    if (params.storeId) q = q.eq('store_id', params.storeId)
+    if (params.from) q = q.gte('sale_datetime', params.from)
+    if (params.to) q = q.lte('sale_datetime', params.to)
+    const { data, error } = await q
+    if (error) {
+      throw new AppError(500, `Failed to load store performance report: ${error.message}`, 'DB_ERROR')
+    }
+
+    const totals = new Map<string, { value: number; units: number; orders: number }>()
+    for (const s of (data ?? []) as Array<{
+      store_id: string
+      total: string | number
+      total_qty: string | number
+    }>) {
+      const cur = totals.get(s.store_id) ?? { value: 0, units: 0, orders: 0 }
+      cur.value += Number(s.total)
+      cur.units += Number(s.total_qty)
+      cur.orders += 1
+      totals.set(s.store_id, cur)
+    }
+
+    const items: StorePerformanceItem[] = (storeRows ?? []).map((st) => {
+      const t = totals.get(st.id) ?? { value: 0, units: 0, orders: 0 }
+      return {
+        store_id: st.id,
+        store_name: st.name,
+        store_code: st.code,
+        city: st.city,
+        total_sales_value: round2(t.value),
+        total_units_sold: t.units,
+        total_orders: t.orders,
+        average_order_value: t.orders > 0 ? round2(t.value / t.orders) : 0,
+      }
+    })
+    items.sort((a, b) => b.total_sales_value - a.total_sales_value)
+
+    const totalRev = round2(items.reduce((sum, s) => sum + s.total_sales_value, 0))
+    const totalOrders = items.reduce((sum, s) => sum + s.total_orders, 0)
+    const totalUnits = items.reduce((sum, s) => sum + s.total_units_sold, 0)
+    const avgStoreRev = items.length > 0 ? round2(totalRev / items.length) : 0
+
+    return {
+      stores: items,
+      comparison: {
+        best_performing_store: items[0]?.store_name ?? null,
+        total_revenue: totalRev,
+        average_store_revenue: avgStoreRev,
+      },
+      summary: {
+        total_revenue: totalRev,
+        total_orders: totalOrders,
+        total_units_sold: totalUnits,
+      },
+    }
+  }
+
   const storesToAnalyze = params.storeId
     ? [STORE_MAP[params.storeId]].filter(Boolean)
     : Object.values(STORE_MAP)
