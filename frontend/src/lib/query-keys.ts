@@ -26,7 +26,16 @@ export const queryKeys = {
   },
   products: {
     all: ['products'] as const,
-    list: (search?: string) => [...queryKeys.products.all, 'list', search ?? ''] as const,
+    list: (params?: unknown) => [...queryKeys.products.all, 'list', params ?? {}] as const,
+    detail: (id: string) => [...queryKeys.products.all, 'detail', id] as const,
+  },
+  categories: {
+    all: ['categories'] as const,
+    list: (params?: unknown) => [...queryKeys.categories.all, 'list', params ?? {}] as const,
+  },
+  units: {
+    all: ['units'] as const,
+    list: (params?: unknown) => [...queryKeys.units.all, 'list', params ?? {}] as const,
   },
   suppliers: {
     all: ['suppliers'] as const,

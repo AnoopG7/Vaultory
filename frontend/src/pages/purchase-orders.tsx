@@ -30,7 +30,8 @@ import {
   type AutoTriggerResponse,
 } from '@/hooks/use-purchase-orders'
 import { useSuppliers } from '@/hooks/use-suppliers'
-import { useLocations, useProducts } from '@/hooks/use-reference'
+import { useLocations } from '@/hooks/use-reference'
+import { useProducts } from '@/hooks/use-products'
 import type {
   PurchaseOrderWithRelations,
   EnrichedPoLine,
