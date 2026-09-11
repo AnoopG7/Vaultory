@@ -412,14 +412,14 @@ export interface SaleDetailResponse {
 }
 
 export interface SaleInputLine {
-  product_id: string
+  productId: string
   qty: number
-  unit_price?: number | null
+  unitPrice?: number | null
 }
 
 export interface CreateSaleInput {
-  store_id: string
-  sale_datetime?: string
+  storeId: string
+  saleDatetime?: string
   discount?: number
   notes?: string
   lines: SaleInputLine[]
@@ -460,9 +460,9 @@ export interface CreateSaleReturnInput {
   reason: string
   notes?: string
   lines: {
-    sale_line_id: string
-    product_id: string
-    qty_returned: number
+    saleLineId: string
+    productId: string
+    qtyReturned: number
   }[]
 }
 

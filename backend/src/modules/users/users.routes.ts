@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { randomUUID } from 'node:crypto'
-import { supabase, supabaseAdmin } from '../../config/index.js'
+import { supabase, supabaseAdmin, env } from '../../config/index.js'
 import {
   AppError,
   asyncHandler,
@@ -31,6 +31,11 @@ import {
 } from './users.store.js'
 
 const router = Router()
+
+const isMockSupabase =
+  !env.SUPABASE_URL ||
+  env.SUPABASE_URL.includes('mock') ||
+  env.SUPABASE_URL.includes('localhost')
 
 /**
  * Validates whether a store ID exists in the database or fallback master.
@@ -243,7 +248,7 @@ router.post(
     }
 
     // Persist to Supabase if available
-    try {
+    if (!isMockSupabase) {
       const { data, error } = await supabase
         .from('profiles')
         .insert({
@@ -260,31 +265,30 @@ router.post(
         .select('*, stores(id, name, code)')
         .single()
 
-      if (!error && data) {
-        insertMemoryUser(data as LocalUserProfile)
-        await recordAuditLog({
-          actorId: req.userId,
-          actorEmail: req.email,
-          actorRole: req.role,
-          action: 'user_created',
-          entity: 'profiles',
-          entityId: newProfile.id,
-          detail: { email: newProfile.email, role: newProfile.role, store_id: newProfile.store_id },
-          ipAddress: req.ip,
-          userAgent: req.get('user-agent'),
-        })
-
-        return res.status(201).json({
-          user: data,
-          message: 'User created successfully',
-        })
+      if (error) {
+        throw new AppError(500, `Profile insert failed: ${error.message}`, 'PROFILE_CREATE_FAILED')
       }
-    } catch (err) {
-      if (err instanceof AppError) throw err
-      // Fallback
+
+      insertMemoryUser(data as LocalUserProfile)
+      await recordAuditLog({
+        actorId: req.userId,
+        actorEmail: req.email,
+        actorRole: req.role,
+        action: 'user_created',
+        entity: 'profiles',
+        entityId: newProfile.id,
+        detail: { email: newProfile.email, role: newProfile.role, store_id: newProfile.store_id },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      })
+
+      return res.status(201).json({
+        user: data,
+        message: 'User created successfully',
+      })
     }
 
-    // Memory fallback persistence
+    // Memory fallback persistence (mock / local dev only)
     insertMemoryUser(newProfile)
     await recordAuditLog({
       actorId: req.userId,
@@ -361,7 +365,7 @@ router.patch(
     if (input.gender !== undefined) updates.gender = input.gender
 
     // Persist to Supabase
-    try {
+    if (!isMockSupabase) {
       const { data, error } = await supabase
         .from('profiles')
         .update({
@@ -372,31 +376,30 @@ router.patch(
         .select('*, stores(id, name, code)')
         .single()
 
-      if (!error && data) {
-        updateMemoryUser(id, data as LocalUserProfile)
-        await recordAuditLog({
-          actorId: req.userId,
-          actorEmail: req.email,
-          actorRole: req.role,
-          action: 'user_updated',
-          entity: 'profiles',
-          entityId: id,
-          detail: { updates },
-          ipAddress: req.ip,
-          userAgent: req.get('user-agent'),
-        })
-
-        return res.json({
-          user: data,
-          message: 'User updated successfully',
-        })
+      if (error) {
+        throw new AppError(500, `Profile update failed: ${error.message}`, 'PROFILE_UPDATE_FAILED')
       }
-    } catch (err) {
-      if (err instanceof AppError) throw err
-      // Fallback
+
+      updateMemoryUser(id, data as LocalUserProfile)
+      await recordAuditLog({
+        actorId: req.userId,
+        actorEmail: req.email,
+        actorRole: req.role,
+        action: 'user_updated',
+        entity: 'profiles',
+        entityId: id,
+        detail: { updates },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      })
+
+      return res.json({
+        user: data,
+        message: 'User updated successfully',
+      })
     }
 
-    // Memory fallback update
+    // Memory fallback update (mock / local dev only)
     const updatedMem = updateMemoryUser(id, updates)
     await recordAuditLog({
       actorId: req.userId,

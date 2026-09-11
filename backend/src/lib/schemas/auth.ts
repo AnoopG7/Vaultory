@@ -8,14 +8,14 @@ import { genderSchema, userRoleSchema } from './enums.js'
  *   - the `profiles` table (DB source of truth for role/store/name)
  */
 
-// POST /auth/signup — create a user + profile (admin-gated).
-// Student users are created manually by an Admin via the user-admin flow,
-// so signup carries profile details (role, optional store).
+// POST /auth/signup — PUBLIC self-service account creation.
+// The server ALWAYS clamps the role to store_staff — role is never accepted
+// from the client, so this endpoint cannot be used to escalate privileges.
+// Admin provisioning (full role/store assignment) lives in the users module.
 export const signUpSchema = z.object({
   email: emailSchema,
   password: z.string().min(8, 'Password must be at least 8 characters').max(72),
   fullName: z.string().trim().min(1, 'Full name is required').max(200),
-  role: userRoleSchema.default('store_staff'),
   storeId: uuidSchema.nullish(),
   gender: genderSchema.optional(),
   address: z.string().trim().max(2000).optional(),

@@ -18,9 +18,10 @@ export type CreateCategoryInput = z.infer<typeof createCategorySchema>
 export const updateCategorySchema = createCategorySchema.partial()
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>
 
-// categories DB row shape.
-export const categorySchema = createCategorySchema.extend({
+// categories DB row shape (independent of the wire schema — snake_case keys).
+export const categorySchema = z.object({
   id: uuidSchema,
+  name: z.string(),
   parent_id: uuidSchema.nullable(),
   sort_order: z.number().int(),
   status: entityStatusSchema,

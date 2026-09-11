@@ -888,6 +888,24 @@ CREATE TRIGGER sales_updated_at
   BEFORE UPDATE ON sales
   FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
 
+-- [F2] Auto-generate the human-readable sale number when the caller omits it.
+-- The broker/store inserts the header without sale_number; this trigger fills
+-- it from the nextval-providing generate_sale_number() (defined later in the
+-- file — PL/pgSQL resolves it at execution time, not DDL time).
+CREATE OR REPLACE FUNCTION trigger_sales_assign_sale_number()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.sale_number IS NULL THEN
+    NEW.sale_number := generate_sale_number();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER sales_assign_sale_number
+  BEFORE INSERT ON sales
+  FOR EACH ROW EXECUTE FUNCTION trigger_sales_assign_sale_number();
+
 
 -- --------------------------------------------------------------------------
 -- 3.14  SALE LINES
@@ -947,10 +965,13 @@ CREATE TRIGGER sale_lines_parent_guard
   BEFORE UPDATE OF sale_id ON sale_lines
   FOR EACH ROW EXECUTE FUNCTION trigger_guard_sale_line_parent();
 
--- [A] Keep total in sync when discount changes directly on the header.
+-- [A] Keep total in sync when discount changes on the header.
 -- chk_sale_total requires total = subtotal - discount, so a bare UPDATE of
 -- discount (or an INSERT with discount set before lines exist) would otherwise
 -- fail / leave total stale.
+-- Intended flow: insert the header with discount 0 (totals 0), insert
+-- sale_lines (recompute trigger sets subtotal/total), then UPDATE discount —
+-- this branch recomputes total = subtotal - discount with lines present.
 CREATE OR REPLACE FUNCTION trigger_sale_recompute_total_on_discount()
 RETURNS TRIGGER AS $$
 BEGIN

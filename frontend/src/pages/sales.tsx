@@ -191,7 +191,7 @@ function PointOfSaleTerminal({ onSaleComplete }: { onSaleComplete?: (sale: Sale)
 
   const canWrite = user?.role === 'admin' || user?.role === 'sales_personnel'
 
-  // Products available
+// Products available
   const availableProducts = useMemo(() => {
     const list = productsData?.products ?? []
     if (!searchFilter.trim()) return list
@@ -268,7 +268,7 @@ function PointOfSaleTerminal({ onSaleComplete }: { onSaleComplete?: (sale: Sale)
     )
   }
 
-  function removeFromCart(key: string) {
+function removeFromCart(key: string) {
     setCart((prev) => prev.filter((item) => item.key !== key))
   }
 
@@ -302,7 +302,7 @@ function PointOfSaleTerminal({ onSaleComplete }: { onSaleComplete?: (sale: Sale)
       toast.error('Please select a store location')
       return
     }
-    if (cart.length === 0) {
+if (cart.length === 0) {
       toast.error('Cart is empty. Add at least one product.')
       return
     }
@@ -312,13 +312,13 @@ function PointOfSaleTerminal({ onSaleComplete }: { onSaleComplete?: (sale: Sale)
     }
 
     const payload: CreateSaleInput = {
-      store_id: effectiveStoreId,
+      storeId: effectiveStoreId,
       discount,
       notes: `${notes ? `${notes} · ` : ''}Paid via ${paymentMethod}`,
       lines: cart.map((item) => ({
-        product_id: item.product_id,
+        productId: item.product_id,
         qty: item.qty,
-        unit_price: item.unit_price,
+        unitPrice: item.unit_price,
       })),
     }
 
@@ -469,7 +469,7 @@ function PointOfSaleTerminal({ onSaleComplete }: { onSaleComplete?: (sale: Sale)
                   const onHand = stockMap.get(item.product_id) ?? 0
                   const isExceeded = item.qty > onHand
 
-                  return (
+return (
                     <div key={item.key} className="p-3 flex flex-col gap-2">
                       <div className="flex items-start justify-between">
                         <div>
@@ -1207,9 +1207,9 @@ function ProcessReturnDialog({
     const payloadLines = lines
       .filter((l) => (returnQtys[l.id] ?? 0) > 0)
       .map((l) => ({
-        sale_line_id: l.id,
-        product_id: l.product_id,
-        qty_returned: returnQtys[l.id],
+        saleLineId: l.id,
+        productId: l.product_id,
+        qtyReturned: returnQtys[l.id],
       }))
 
     createReturn.mutate(

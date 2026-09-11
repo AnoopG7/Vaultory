@@ -1,2 +1,2 @@
 export { env, isProd } from './env.js'
-export { supabase, supabaseAdmin } from './supabase.js'
+export { supabase, supabaseAnon, supabaseAdmin } from './supabase.js'

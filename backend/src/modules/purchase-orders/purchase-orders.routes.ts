@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { supabase } from '../../config/index.js'
+import { env, supabase } from '../../config/index.js'
 import {
   AppError,
   asyncHandler,
@@ -26,6 +26,114 @@ function assertCanManagePo(role: string | undefined): void {
   if (!role || !PO_MANAGE_ROLES.includes(role)) {
     throw new AppError(403, 'You do not have permission to manage purchase orders', 'FORBIDDEN')
   }
+}
+
+// Returns the location IDs belonging to a store. Used to scope `store_staff`
+// PO reads/writes to their own store (a PO's store is its destination).
+async function getStoreLocationIds(storeId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('locations')
+    .select('id')
+    .eq('store_id', storeId)
+  if (!data) {
+    const fallback = STORE_LOCATION_MAP[storeId]
+    return fallback ? [fallback] : []
+  }
+  return data.map((l) => l.id as string)
+}
+
+// All locations across the seeded stores (mirrors STORE_LOCATIONS in sales).
+const STORE_LOCATION_MAP: Record<string, string> = {
+  'e1000000-0000-0000-0000-000000000001': 'a1000000-0000-0000-0000-000000000001',
+  'e1000000-0000-0000-0000-000000000002': 'a1000000-0000-0000-0000-000000000002',
+  'e1000000-0000-0000-0000-000000000003': 'a1000000-0000-0000-0000-000000000003',
+}
+
+// DB-backed deployments (real Supabase URL): every operation below targets the
+// DB directly. The in-memory stores are only the fallback for mock/local URLs.
+const isMockSupabase = !env.SUPABASE_URL || env.SUPABASE_URL.includes('mock') || env.SUPABASE_URL.includes('localhost')
+
+// Load a PO from the DB and shape it like enrichPurchaseOrder() (used by the
+// DB-backed list/detail/status/receive paths so responses stay identical).
+interface DbPoLineRow {
+  id: string
+  po_id: string
+  product_id: string
+  qty_ordered: number
+  qty_received: number
+  unit_cost: number
+  line_total: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  products?: { name?: string; sku_code?: string }
+}
+interface SnapshotLine {
+  id: string
+  po_id: string
+  product_id: string
+  qty_ordered: number
+  qty_received: number
+  unit_cost: number
+  line_total: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  product_name: string
+  sku_code: string
+  remaining_qty: number
+}
+interface PoSnapshot {
+  id: string
+  po_number: string
+  supplier_id: string
+  destination_id: string
+  source: string
+  status: string
+  order_date: string
+  expected_date: string | null
+  received_date: string | null
+  total_items: number
+  total_qty_ordered: number
+  total_qty_received: number
+  total_cost: number
+  created_by: string | null
+  notes: string | null
+  created_at: string
+  supplier: { name?: string; code?: string; lead_time_days?: number; email?: string; phone?: string }
+  destination: { name?: string; code?: string; type?: string; city?: string }
+  lines: SnapshotLine[]
+  fulfillment_percentage: number
+}
+async function fetchPoSnapshot(id: string): Promise<PoSnapshot | null> {
+  const { data: po, error } = await supabase
+    .from('purchase_orders')
+    .select(`
+      *,
+      suppliers(name, code, lead_time_days, email, phone),
+      locations(name, code, type, city),
+      po_lines(*, products(name, sku_code, category_id, unit_id, is_perishable))
+    `)
+    .eq('id', id)
+    .maybeSingle()
+  if (error || !po) return null
+
+  const { po_lines, suppliers, locations, ...rest } = po
+  const lines: SnapshotLine[] = (po_lines ?? ([] as DbPoLineRow[])).map((l: DbPoLineRow) => ({
+    ...l,
+    product_name: l.products?.name ?? 'Product',
+    sku_code: l.products?.sku_code ?? 'SKU',
+    remaining_qty: Math.max(0, Number(l.qty_ordered) - Number(l.qty_received)),
+  }))
+  return {
+    ...rest,
+    supplier: suppliers,
+    destination: locations,
+    lines,
+    fulfillment_percentage: Number(rest.total_qty_ordered) > 0
+      ? Number(((Number(rest.total_qty_received) / Number(rest.total_qty_ordered)) * 100).toFixed(1))
+      : 0,
+  } as PoSnapshot
 }
 
 // -----------------------------------------------------------------------------
@@ -440,6 +548,13 @@ router.get(
     const search = query.search?.toLowerCase().trim()
     const { limit, offset, source } = query
 
+    // Store-scoped roles (store_staff / sales_personnel) see only POs destined
+    // for their own store.
+    let storeLocIds: string[] | null = null
+    if (req.role === 'store_staff' || req.role === 'sales_personnel') {
+      storeLocIds = req.storeId ? await getStoreLocationIds(req.storeId) : []
+    }
+
     try {
       let sbQuery = supabase
         .from('purchase_orders')
@@ -451,6 +566,28 @@ router.get(
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+
+      if (storeLocIds !== null) {
+        if (storeLocIds.length === 0) {
+          return res.json({
+            purchase_orders: [],
+            total: 0,
+            limit,
+            offset,
+            summary: {
+              total_pos: 0,
+              draft: 0,
+              sent: 0,
+              partially_received: 0,
+              received: 0,
+              closed: 0,
+              cancelled: 0,
+              total_spend: 0,
+            },
+          })
+        }
+        sbQuery = sbQuery.in('destination_id', storeLocIds)
+      }
 
       if (status) {
         sbQuery = sbQuery.eq('status', status)
@@ -479,11 +616,33 @@ router.get(
             ? Number(((d.total_qty_received / d.total_qty_ordered) * 100).toFixed(1))
             : 0,
         }))
+
+        // Summary metrics across all POs (DB-backed, not memory).
+        let summaryQuery = supabase
+          .from('purchase_orders')
+          .select('status, total_cost')
+        if (storeLocIds !== null) {
+          summaryQuery = summaryQuery.in('destination_id', storeLocIds)
+        }
+        const { data: allRows, error: summaryErr } = await summaryQuery
+        const rows = summaryErr ? [] : (allRows ?? [])
+        const summary = {
+          total_pos: rows.length,
+          draft: rows.filter((r) => r.status === 'draft').length,
+          sent: rows.filter((r) => r.status === 'sent').length,
+          partially_received: rows.filter((r) => r.status === 'partially_received').length,
+          received: rows.filter((r) => r.status === 'received').length,
+          closed: rows.filter((r) => r.status === 'closed').length,
+          cancelled: rows.filter((r) => r.status === 'cancelled').length,
+          total_spend: rows.reduce((acc, r) => acc + (r.status !== 'cancelled' ? Number(r.total_cost) : 0), 0),
+        }
+
         return res.json({
           purchase_orders: enriched,
           total: count ?? data.length,
           limit,
           offset,
+          summary,
         })
       }
     } catch {
@@ -521,19 +680,25 @@ router.get(
     // Sort descending by created_at
     filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
+    // Store staff see only their own store's POs in the memory fallback too.
+    if (storeLocIds !== null) {
+      filtered = filtered.filter((p) => storeLocIds.includes(p.destination_id))
+    }
+
     const total = filtered.length
     const paginated = filtered.slice(offset, offset + limit).map(enrichPurchaseOrder)
 
     // Summary metrics across all POs
+    const scopedMemoryRows = storeLocIds !== null ? filtered : memoryPurchaseOrders
     const summary = {
-      total_pos: memoryPurchaseOrders.length,
-      draft: memoryPurchaseOrders.filter((p) => p.status === 'draft').length,
-      sent: memoryPurchaseOrders.filter((p) => p.status === 'sent').length,
-      partially_received: memoryPurchaseOrders.filter((p) => p.status === 'partially_received').length,
-      received: memoryPurchaseOrders.filter((p) => p.status === 'received').length,
-      closed: memoryPurchaseOrders.filter((p) => p.status === 'closed').length,
-      cancelled: memoryPurchaseOrders.filter((p) => p.status === 'cancelled').length,
-      total_spend: memoryPurchaseOrders.reduce((acc, p) => acc + (p.status !== 'cancelled' ? p.total_cost : 0), 0),
+      total_pos: scopedMemoryRows.length,
+      draft: scopedMemoryRows.filter((p) => p.status === 'draft').length,
+      sent: scopedMemoryRows.filter((p) => p.status === 'sent').length,
+      partially_received: scopedMemoryRows.filter((p) => p.status === 'partially_received').length,
+      received: scopedMemoryRows.filter((p) => p.status === 'received').length,
+      closed: scopedMemoryRows.filter((p) => p.status === 'closed').length,
+      cancelled: scopedMemoryRows.filter((p) => p.status === 'cancelled').length,
+      total_spend: scopedMemoryRows.reduce((acc, p) => acc + (p.status !== 'cancelled' ? p.total_cost : 0), 0),
     }
 
     res.json({
@@ -556,6 +721,12 @@ router.get(
   asyncHandler(async (req, res) => {
     const { id } = validated(req, 'params', poIdParamSchema)
 
+    // Store-scoped roles can only open POs destined for their own store.
+    let allowedDestinationIds: string[] | null = null
+    if (req.role === 'store_staff' || req.role === 'sales_personnel') {
+      allowedDestinationIds = req.storeId ? await getStoreLocationIds(req.storeId) : []
+    }
+
     try {
       const { data: po, error } = await supabase
         .from('purchase_orders')
@@ -569,9 +740,15 @@ router.get(
         .maybeSingle()
 
       if (!error && po) {
+        if (
+          allowedDestinationIds !== null &&
+          !allowedDestinationIds.includes(po.destination_id as string)
+        ) {
+          throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
+        }
         const receiptsRes = await supabase
           .from('po_receipts')
-          .select('*, po_receipt_lines(*)')
+          .select('*, po_receipt_lines!fk_prl_receipt_po(*)')
           .eq('po_id', id)
           .order('received_at', { ascending: false })
 
@@ -592,6 +769,13 @@ router.get(
     // In-memory fallback
     const po = memoryPurchaseOrders.find((p) => p.id === id)
     if (!po) {
+      throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
+    }
+
+    if (
+      allowedDestinationIds !== null &&
+      !allowedDestinationIds.includes(po.destination_id)
+    ) {
       throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
     }
 
@@ -639,6 +823,105 @@ router.post(
     })
 
     const productIds = normalizedLines.map((l) => l.productId)
+
+    // =========================================================================
+    // DB-BACKED CREATE (real deployed Supabase). The in-memory store below is
+    // only exercised in mock/local mode.
+    // =========================================================================
+    if (!isMockSupabase) {
+      const openStatuses = ['draft', 'sent', 'partially_received']
+
+      if (!allowDuplicate) {
+        const { data: openPos, error: openErr } = await supabase
+          .from('purchase_orders')
+          .select('id, po_number, status')
+          .in('status', openStatuses)
+          .eq('supplier_id', supplierId)
+          .eq('destination_id', destinationId)
+        if (openErr) {
+          throw new AppError(500, `Failed to check for duplicate purchase orders: ${openErr.message}`, 'DB_ERROR')
+        }
+        if (openPos && openPos.length > 0) {
+          const { data: openLines } = await supabase
+            .from('po_lines')
+            .select('product_id, po_id')
+            .in('po_id', openPos.map((p) => p.id))
+            .in('product_id', productIds)
+          if (openLines && openLines.length > 0) {
+            const overlapIds = [...new Set(openLines.map((l) => l.product_id))]
+            const { data: prods } = await supabase.from('products').select('id, name').in('id', overlapIds)
+            const names = new Map((prods ?? []).map((p) => [p.id, p.name]))
+            const dupPo = openPos.find((p) => p.id === openLines[0].po_id)
+            throw new AppError(
+              409,
+              `An open purchase order (${dupPo?.po_number ?? ''}, status: ${dupPo?.status ?? ''}) already exists for this supplier and destination with overlapping product(s): ${overlapIds.map((id) => names.get(id) ?? id).join(', ')}. To place an intentional additional order, set allowDuplicate: true.`,
+              'DUPLICATE_OPEN_PO',
+            )
+          }
+        }
+      }
+
+      // Resolve unit costs from the DB (supplier_products first, then product cost).
+      const { data: supProducts } = await supabase
+        .from('supplier_products')
+        .select('product_id, unit_cost')
+        .eq('supplier_id', supplierId)
+      const { data: prodRows } = await supabase
+        .from('products')
+        .select('id, cost_price')
+        .in('id', productIds)
+      // unit_cost may be NULL in seed data — skip those rows so resolution
+      // falls through to the product's cost_price instead of coercing to 0.
+      const costBySupplier = new Map(
+        (supProducts ?? [])
+          .filter((sp) => sp.unit_cost !== null && sp.unit_cost !== undefined)
+          .map((sp) => [sp.product_id, Number(sp.unit_cost)]),
+      )
+      const costByProduct = new Map((prodRows ?? []).map((p) => [p.id, Number(p.cost_price)]))
+
+      const seq = await supabase.rpc('generate_po_number')
+      if (seq.error || !seq.data) {
+        throw new AppError(500, `Failed to allocate purchase order number: ${seq.error?.message ?? 'no number returned'}`, 'DB_ERROR')
+      }
+
+      const expectedDate = body.expectedDate || body.expected_date || null
+      const { data: header, error: hErr } = await supabase
+        .from('purchase_orders')
+        .insert({
+          po_number: String(seq.data),
+          supplier_id: supplierId,
+          destination_id: destinationId,
+          source,
+          status: 'draft',
+          expected_date: expectedDate,
+          created_by: req.userId ?? null,
+          notes,
+        })
+        .select('id, po_number')
+        .single()
+      if (hErr) {
+        throw new AppError(500, `Failed to create purchase order: ${hErr.message}`, 'DB_ERROR')
+      }
+
+      // line_total is a GENERATED column — never send it to the DB.
+      const dbLines = normalizedLines.map((l) => ({
+        po_id: header.id,
+        product_id: l.productId,
+        qty_ordered: l.qtyOrdered,
+        unit_cost: l.explicitUnitCost ?? costBySupplier.get(l.productId) ?? costByProduct.get(l.productId) ?? 100,
+        notes: null,
+      }))
+      const { error: linesErr } = await supabase.from('po_lines').insert(dbLines)
+      if (linesErr) {
+        throw new AppError(500, `Failed to write purchase order lines: ${linesErr.message}`, 'DB_ERROR')
+      }
+
+      const snapshot = await fetchPoSnapshot(header.id)
+      return res.status(201).json({
+        purchase_order: snapshot,
+        message: `Purchase order ${header.po_number} created successfully`,
+      })
+    }
 
     // =========================================================================
     // DUPLICATE PO PREVENTION CHECK
@@ -987,6 +1270,74 @@ router.patch(
     const targetStatus = normalizeStatus(body.status)
     const cancelReason = body.cancelReason || body.cancel_reason
 
+    // DB-backed lifecycle transition.
+    if (!isMockSupabase) {
+      const { data: dbPo, error: dbErr } = await supabase
+        .from('purchase_orders')
+        .select('id, po_number, status')
+        .eq('id', id)
+        .maybeSingle()
+      if (dbErr) {
+        throw new AppError(500, `Failed to load purchase order: ${dbErr.message}`, 'DB_ERROR')
+      }
+      if (!dbPo) {
+        throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
+      }
+
+      const current = dbPo.status
+      const patch: Record<string, unknown> = {}
+      let statusMessage = ''
+
+      if (targetStatus === 'cancelled') {
+        if (current === 'closed') {
+          throw new AppError(400, 'Cannot cancel a closed purchase order', 'INVALID_TRANSITION')
+        }
+        if (current === 'cancelled') {
+          throw new AppError(400, 'Purchase order is already cancelled', 'ALREADY_CANCELLED')
+        }
+        if (!cancelReason) {
+          throw new AppError(400, 'cancelReason is required when cancelling a purchase order', 'CANCEL_REASON_REQUIRED')
+        }
+        Object.assign(patch, {
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancelled_by: req.userId ?? null,
+          cancel_reason: cancelReason,
+        })
+        statusMessage = 'Purchase order cancelled'
+      } else if (current === 'draft' && targetStatus === 'sent') {
+        Object.assign(patch, { status: 'sent', approved_at: new Date().toISOString(), approved_by: req.userId ?? null })
+        statusMessage = 'Purchase order marked as sent'
+      } else if ((current === 'sent' || current === 'draft') && targetStatus === 'partially_received') {
+        Object.assign(patch, { status: 'partially_received' })
+        statusMessage = 'Status updated to partially received'
+      } else if ((current === 'sent' || current === 'partially_received') && targetStatus === 'received') {
+        Object.assign(patch, { status: 'received', received_date: new Date().toISOString().split('T')[0] })
+        statusMessage = 'Purchase order marked as fully received'
+      } else if (current === 'received' && targetStatus === 'closed') {
+        Object.assign(patch, { status: 'closed' })
+        statusMessage = 'Purchase order closed and finalized'
+      } else if (current === targetStatus) {
+        statusMessage = `Purchase order is already in ${targetStatus} state`
+      } else {
+        throw new AppError(
+          400,
+          `Invalid lifecycle transition from ${current} to ${targetStatus}. Follow the progression: draft -> sent -> partially_received -> received -> closed.`,
+          'INVALID_TRANSITION',
+        )
+      }
+
+      if (Object.keys(patch).length > 0) {
+        const { error: updErr } = await supabase.from('purchase_orders').update(patch).eq('id', id)
+        if (updErr) {
+          throw new AppError(500, `Failed to update purchase order status: ${updErr.message}`, 'DB_ERROR')
+        }
+      }
+
+      const snapshot = await fetchPoSnapshot(id)
+      return res.json({ purchase_order: snapshot, message: statusMessage })
+    }
+
     const po = memoryPurchaseOrders.find((p) => p.id === id)
     if (!po) {
       throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
@@ -1073,6 +1424,141 @@ router.post(
 
     const { id } = validated(req, 'params', poIdParamSchema)
     const { lines, notes, receivedBy } = validated(req, 'body', receivePurchaseOrderSchema)
+
+    // DB-backed goods-in: admission control here gives precise errors, then each
+    // line is applied atomically via fn_receive_po (locks the line, writes the
+    // receipt + receipt line, bumps qty_received, and adds stock in one txn).
+    if (!isMockSupabase) {
+      const { data: dbPo, error: dbErr } = await supabase
+        .from('purchase_orders')
+        .select('id, po_number, status, destination_id')
+        .eq('id', id)
+        .maybeSingle()
+      if (dbErr) {
+        throw new AppError(500, `Failed to load purchase order: ${dbErr.message}`, 'DB_ERROR')
+      }
+      if (!dbPo) {
+        throw new AppError(404, 'Purchase order not found', 'NOT_FOUND')
+      }
+      if (dbPo.status === 'draft') {
+        throw new AppError(400, 'Cannot receive goods for a draft purchase order. Please send the PO first.', 'PO_NOT_SENT')
+      }
+      if (dbPo.status === 'closed') {
+        throw new AppError(400, 'Cannot receive goods for a closed purchase order.', 'PO_CLOSED')
+      }
+      if (dbPo.status === 'cancelled') {
+        throw new AppError(400, 'Cannot receive goods for a cancelled purchase order.', 'PO_CANCELLED')
+      }
+
+      const { data: dbPoLines, error: linesErr } = await supabase
+        .from('po_lines')
+        .select('id, product_id, qty_ordered, qty_received, unit_cost')
+        .eq('po_id', id)
+      if (linesErr) {
+        throw new AppError(500, `Failed to load purchase order lines: ${linesErr.message}`, 'DB_ERROR')
+      }
+
+      const lineProductIds = [...new Set((dbPoLines ?? []).map((l) => l.product_id))]
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id, name, is_perishable')
+        .in('id', lineProductIds)
+      const prodInfo = new Map((prods ?? []).map((p) => [p.id, p]))
+
+      for (const item of lines) {
+        const poLineId = item.poLineId || item.po_line_id
+        const productId = item.productId || item.product_id
+        const qtyReceived = Number(item.qtyReceived || item.qty_received || 0)
+        const earliestExpiry = item.earliestExpiryDate || item.earliest_expiry_date || null
+
+        if (qtyReceived <= 0) {
+          throw new AppError(400, 'Quantity received must be greater than 0', 'INVALID_QUANTITY')
+        }
+
+        const matchingLine = (dbPoLines ?? []).find((l) => (poLineId ? l.id === poLineId : l.product_id === productId))
+        if (!matchingLine) {
+          throw new AppError(400, `PO line item not found for product ${productId}`, 'PO_LINE_MISMATCH')
+        }
+
+        const remaining = Number(matchingLine.qty_ordered) - Number(matchingLine.qty_received)
+        if (qtyReceived > remaining + 1e-9) {
+          throw new AppError(
+            400,
+            `Cannot receive ${qtyReceived} units for line item ${matchingLine.id}. Remaining quantity is only ${remaining}.`,
+            'OVER_RECEIPT',
+          )
+        }
+
+        const prod = prodInfo.get(productId)
+        if (prod?.is_perishable && !earliestExpiry) {
+          throw new AppError(
+            400,
+            `Product ${prod.name} is perishable and requires an earliest_expiry_date for goods-in.`,
+            'EXPIRY_DATE_REQUIRED',
+          )
+        }
+
+        const { error: rpcErr } = await supabase.rpc('fn_receive_po', {
+          p_po_id: id,
+          p_po_line_id: matchingLine.id,
+          p_product_id: productId,
+          p_location_id: dbPo.destination_id,
+          p_qty_received: qtyReceived,
+          p_received_by: receivedBy ?? req.userId ?? null,
+          p_notes: notes ?? null,
+          p_earliest_expiry_date: earliestExpiry,
+        })
+        if (rpcErr) {
+          throw new AppError(500, `Goods-in failed for line ${matchingLine.id}: ${rpcErr.message}`, 'DB_ERROR')
+        }
+      }
+
+      // Progress the lifecycle like the in-memory path: all lines fully
+      // received -> received; some received -> partially_received.
+      const { data: progressedLines, error: progErr } = await supabase
+        .from('po_lines')
+        .select('qty_ordered, qty_received')
+        .eq('po_id', id)
+      if (progErr) {
+        throw new AppError(500, `Failed to verify receipt quantities: ${progErr.message}`, 'DB_ERROR')
+      }
+      const anyReceived = (progressedLines ?? []).some((l) => Number(l.qty_received) > 0)
+      const allReceived = (progressedLines ?? []).length > 0
+        && (progressedLines ?? []).every((l) => Number(l.qty_received) >= Number(l.qty_ordered))
+      if (allReceived) {
+        const { error: statusErr } = await supabase
+          .from('purchase_orders')
+          .update({ status: 'received', received_date: new Date().toISOString().split('T')[0] })
+          .eq('id', id)
+        if (statusErr) {
+          throw new AppError(500, `Failed to mark purchase order as received: ${statusErr.message}`, 'DB_ERROR')
+        }
+      } else if (anyReceived) {
+        const { error: statusErr } = await supabase
+          .from('purchase_orders')
+          .update({ status: 'partially_received' })
+          .eq('id', id)
+        if (statusErr) {
+          throw new AppError(500, `Failed to mark purchase order as partially received: ${statusErr.message}`, 'DB_ERROR')
+        }
+      }
+
+      const snapshot = await fetchPoSnapshot(id)
+      const { data: receipts, error: recErr } = await supabase
+        .from('po_receipts')
+        .select('*, po_receipt_lines!fk_prl_receipt_po(*)')
+        .eq('po_id', id)
+        .order('received_at', { ascending: false })
+      if (recErr) {
+        throw new AppError(500, `Failed to load receipts: ${recErr.message}`, 'DB_ERROR')
+      }
+
+      return res.status(201).json({
+        receipt: receipts?.[0] ?? { po_id: id, lines: [] },
+        purchase_order: snapshot,
+        message: `Goods-in processed successfully. Inventory updated at ${snapshot?.destination?.name ?? 'destination'}. Current PO status: ${snapshot?.status ?? dbPo.status}.`,
+      })
+    }
 
     const po = memoryPurchaseOrders.find((p) => p.id === id)
     if (!po) {
@@ -1218,6 +1704,27 @@ router.get(
   validate(poIdParamSchema, 'params'),
   asyncHandler(async (req, res) => {
     const { id } = validated(req, 'params', poIdParamSchema)
+
+    // DB-backed receipts list.
+    if (!isMockSupabase) {
+      const { data: receipts, error } = await supabase
+        .from('po_receipts')
+        .select('*, po_receipt_lines!fk_prl_receipt_po(*, products(name, sku_code))')
+        .eq('po_id', id)
+        .order('received_at', { ascending: false })
+      if (error) {
+        throw new AppError(500, `Failed to load receipts: ${error.message}`, 'DB_ERROR')
+      }
+      const mapped = (receipts ?? []).map((r: { po_receipt_lines?: Array<{ products?: { name?: string; sku_code?: string } }> } & object) => ({
+        ...r,
+        lines: (r.po_receipt_lines ?? []).map((rl: { products?: { name?: string; sku_code?: string } } & object) => ({
+          ...rl,
+          product_name: rl.products?.name ?? 'Product',
+          sku_code: rl.products?.sku_code ?? 'SKU',
+        })),
+      }))
+      return res.json({ receipts: mapped })
+    }
 
     const receipts = memoryPoReceipts
       .filter((r) => r.po_id === id)

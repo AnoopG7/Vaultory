@@ -27,11 +27,12 @@ export type CreateSupplierInput = z.infer<typeof createSupplierSchema>
 export const updateSupplierSchema = createSupplierSchema.partial()
 export type UpdateSupplierInput = z.infer<typeof updateSupplierSchema>
 
-// POST /suppliers/:id/products — map products (many-to-many).
+// POST /suppliers/:id/products — map a product to a supplier (many-to-many).
 export const mapSupplierProductsSchema = z.object({
-  productIds: z.array(uuidSchema).min(1),
-  unitCosts: z.record(z.string(), nonNegativeMoneySchema).optional(),
-  leadTimeOverrides: z.record(z.string(), z.coerce.number().int().positive()).optional(),
+  product_id: uuidSchema,
+  unit_cost: nonNegativeMoneySchema.nullish(),
+  lead_time_override: z.coerce.number().int().positive().nullish(),
+  is_preferred: z.boolean().optional(),
 })
 export type MapSupplierProductsInput = z.infer<typeof mapSupplierProductsSchema>
 

@@ -13,7 +13,7 @@ import type {
 } from '@/lib/types'
 
 export interface SaleListParams {
-  store_id?: string
+  storeId?: string
   from?: string
   to?: string
   status?: 'active' | 'voided'

@@ -7,12 +7,12 @@ import {
   validated,
 } from '../../middleware/index.js'
 import {
-  CreateSaleRequest,
-  ListReturnsQuery,
-  ListSalesQuery,
-  ReturnSaleRequest,
-  SaleIdParam,
-  VoidSaleRequest,
+  createSaleSchema,
+  listReturnsQuerySchema,
+  listSalesQuerySchema,
+  returnSaleSchema,
+  saleIdParamSchema,
+  voidSaleSchema,
 } from '../../lib/schemas/index.js'
 import {
   createSaleTransaction,
@@ -44,11 +44,12 @@ function assertCanWriteSale(role: string | undefined): void {
 router.post(
   '/sales',
   requireAuth,
-  validate(CreateSaleRequest),
+  validate(createSaleSchema),
   asyncHandler(async (req, res) => {
     assertCanWriteSale(req.role)
 
-    const payload = validated(req, 'body', CreateSaleRequest)
+    const payload = validated(req, 'body', createSaleSchema)
+
     const sale = await createSaleTransaction(
       payload,
       {
@@ -72,19 +73,19 @@ router.post(
 router.get(
   '/sales',
   requireAuth,
-  validate(ListSalesQuery, 'query'),
+  validate(listSalesQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
-    const { store_id, from, to, status, limit, offset } = validated(
+    const { storeId, from, to, status, limit, offset } = validated(
       req,
       'query',
-      ListSalesQuery,
+      listSalesQuerySchema,
     )
 
     // Store Staff are scoped to their own store (BRD §12: view own store).
-    if (req.role === 'store_staff' && req.storeId && store_id && store_id !== req.storeId) {
+    if (req.role === 'store_staff' && req.storeId && storeId && storeId !== req.storeId) {
       throw new AppError(403, 'You can only view your own store', 'FORBIDDEN')
     }
-    const effectiveStore = req.role === 'store_staff' && req.storeId ? req.storeId : store_id
+    const effectiveStore = req.role === 'store_staff' && req.storeId ? req.storeId : storeId
 
     const { sales, total } = await querySales({
       store_id: effectiveStore,
@@ -105,18 +106,18 @@ router.get(
 router.get(
   '/sales/returns',
   requireAuth,
-  validate(ListReturnsQuery, 'query'),
+  validate(listReturnsQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
-    const { sale_id, store_id, limit, offset } = validated(req, 'query', ListReturnsQuery)
+    const { saleId, storeId, limit, offset } = validated(req, 'query', listReturnsQuerySchema)
 
     // Store Staff scoped to their own store
-    if (req.role === 'store_staff' && req.storeId && store_id && store_id !== req.storeId) {
+    if (req.role === 'store_staff' && req.storeId && storeId && storeId !== req.storeId) {
       throw new AppError(403, 'You can only view your own store', 'FORBIDDEN')
     }
-    const effectiveStore = req.role === 'store_staff' && req.storeId ? req.storeId : store_id
+    const effectiveStore = req.role === 'store_staff' && req.storeId ? req.storeId : storeId
 
     const { returns, total } = await querySaleReturns({
-      sale_id,
+      sale_id: saleId,
       store_id: effectiveStore,
       limit,
       offset,
@@ -132,9 +133,9 @@ router.get(
 router.get(
   '/sales/:id',
   requireAuth,
-  validate(SaleIdParam, 'params'),
+  validate(saleIdParamSchema, 'params'),
   asyncHandler(async (req, res) => {
-    const { id } = validated(req, 'params', SaleIdParam)
+    const { id } = validated(req, 'params', saleIdParamSchema)
     const detail = await getSaleDetail(id)
 
     // Store staff can only view sales from their store
@@ -152,15 +153,15 @@ router.get(
 router.post(
   '/sales/:id/void',
   requireAuth,
-  validate(SaleIdParam, 'params'),
-  validate(VoidSaleRequest),
+  validate(saleIdParamSchema, 'params'),
+  validate(voidSaleSchema),
   asyncHandler(async (req, res) => {
     if (req.role !== 'admin') {
       throw new AppError(403, 'Only an admin can void a sale', 'FORBIDDEN')
     }
 
-    const { id } = validated(req, 'params', SaleIdParam)
-    const payload = validated(req, 'body', VoidSaleRequest)
+    const { id } = validated(req, 'params', saleIdParamSchema)
+    const payload = validated(req, 'body', voidSaleSchema)
 
     const result = await voidSaleTransaction(
       id,
@@ -186,13 +187,13 @@ router.post(
 router.post(
   '/sales/:id/return',
   requireAuth,
-  validate(SaleIdParam, 'params'),
-  validate(ReturnSaleRequest),
+  validate(saleIdParamSchema, 'params'),
+  validate(returnSaleSchema),
   asyncHandler(async (req, res) => {
     assertCanWriteSale(req.role)
 
-    const { id } = validated(req, 'params', SaleIdParam)
-    const payload = validated(req, 'body', ReturnSaleRequest)
+    const { id } = validated(req, 'params', saleIdParamSchema)
+    const payload = validated(req, 'body', returnSaleSchema)
 
     const result = await processSaleReturnTransaction(
       id,
@@ -218,9 +219,9 @@ router.post(
 router.get(
   '/sales/:id/returns',
   requireAuth,
-  validate(SaleIdParam, 'params'),
+  validate(saleIdParamSchema, 'params'),
   asyncHandler(async (req, res) => {
-    const { id } = validated(req, 'params', SaleIdParam)
+    const { id } = validated(req, 'params', saleIdParamSchema)
     const { returns } = await querySaleReturns({ sale_id: id })
     res.json({ returns })
   }),

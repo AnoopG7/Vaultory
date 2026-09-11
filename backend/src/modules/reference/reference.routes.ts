@@ -7,7 +7,7 @@ import {
   validate,
   validated,
 } from '../../middleware/index.js'
-import { ProductDropdownQuery } from '../../lib/schemas/index.js'
+import { productDropdownQuerySchema } from '../../lib/schemas/index.js'
 
 const router = Router()
 
@@ -73,9 +73,9 @@ router.get(
 router.get(
   '/products',
   requireAuth,
-  validate(ProductDropdownQuery, 'query'),
+  validate(productDropdownQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
-    const { search, limit } = validated(req, 'query', ProductDropdownQuery)
+    const { search, limit } = validated(req, 'query', productDropdownQuerySchema)
 
     // cost_price is MASKED at the app layer — never returned to any role here.
     let query = supabase

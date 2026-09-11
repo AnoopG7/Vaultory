@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { supabase } from '../config/index.js'
+import { supabase, supabaseAnon } from '../config/index.js'
 import { isProd } from '../config/env.js'
 import { AppError } from './error.js'
 import { getMemoryUserById } from '../modules/users/users.store.js'
@@ -58,7 +58,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser(token)
+  } = await supabaseAnon.auth.getUser(token)
 
   if (error || !user) {
     throw new AppError(401, 'Invalid or expired session', 'UNAUTHENTICATED')

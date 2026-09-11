@@ -23,11 +23,11 @@ import {
 const router = Router()
 
 /**
- * POST /api/auth/signup
- * ADMIN-GATED user provisioning: creates a Supabase Auth user + profiles row
- * via the service-role client. Admin creates staff accounts (SRS §12).
+ * POST /api/auth/signup — PUBLIC self-service account creation.
+ * Creates a Supabase Auth user + profiles row via the service-role client.
+ * The server clamps the role to store_staff (see handleSignup).
  */
-router.post('/auth/signup', requireAuth, validate(signUpSchema), asyncHandler(handleSignup))
+router.post('/auth/signup', validate(signUpSchema), asyncHandler(handleSignup))
 
 /** POST /api/auth/signin — email + password. Public. */
 router.post('/auth/signin', validate(signInSchema), asyncHandler(handleSignin))
