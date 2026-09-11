@@ -30,6 +30,22 @@ function isExec(role: string | undefined): boolean {
   return Boolean(role && EXEC_ROLES.includes(role))
 }
 
+// Unique UUID that never matches a real row, used to scope out users whose
+// store-staff/sales-personnel role has no store assigned (defence in depth:
+// an unassigned scoped user must not fall back to seeing ALL stores).
+const NO_STORE_SENTINEL = '00000000-0000-0000-0000-000000000000'
+
+// Returns the effective store scope for scoped roles. `null` means the caller
+// is not store-scoped (sees everything). A sentinel UUID means the caller is
+// scoped but has no store assigned → queries scope to nothing.
+function storeScope(
+  role: string | undefined,
+  storeId: string | null | undefined,
+): string | null {
+  if (role !== 'store_staff' && role !== 'sales_personnel') return null
+  return storeId ?? NO_STORE_SENTINEL
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/dashboard/summary — aggregated KPIs
 // ---------------------------------------------------------------------------
@@ -44,12 +60,16 @@ router.get(
     todayStart.setUTCHours(0, 0, 0, 0)
 
     // --- Sales aggregates -----------------------------------------------------
-    // Today's active sales (sum of totals + count).
+    // Today's active sales (sum of totals + count), scoped for store roles.
+    const scope = storeScope(req.role, req.storeId)
     const todaySalesQuery = supabase
       .from('sales')
       .select('total', { count: 'exact' })
       .eq('status', 'active')
       .gte('sale_datetime', todayStart.toISOString())
+    if (scope !== null) {
+      todaySalesQuery.eq('store_id', scope)
+    }
 
     const { data: todaySales, count: todayCount, error: todaySalesErr } = await todaySalesQuery
     if (todaySalesErr) throw new AppError(500, 'Failed to load today\'s sales', 'DB_ERROR')
@@ -58,14 +78,18 @@ router.get(
 
     // --- Inventory aggregates (via inventory_status view) ---------------------
     let invQuery = supabase.from('inventory_status').select('*')
-    // Store staff only see their own store's location.
-    if (req.role === 'store_staff' && req.storeId) {
-      const { data: locs } = await supabase
-        .from('locations')
-        .select('id')
-        .eq('store_id', req.storeId)
-      const locIds = (locs ?? []).map((l) => l.id as string)
-      if (locIds.length) invQuery = invQuery.in('location_id', locIds)
+    // Store-scoped roles only see their own store's locations.
+    if (scope !== null) {
+      if (scope === NO_STORE_SENTINEL) {
+        invQuery = invQuery.eq('location_id', NO_STORE_SENTINEL)
+      } else {
+        const { data: locs } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('store_id', scope)
+        const locIds = (locs ?? []).map((l) => l.id as string)
+        if (locIds.length) invQuery = invQuery.in('location_id', locIds)
+      }
     }
 
     const { data: inventoryView, error: invErr } = await invQuery
@@ -155,15 +179,16 @@ router.get(
     start.setUTCHours(0, 0, 0, 0)
     start.setUTCDate(start.getUTCDate() - (days - 1))
 
+    // Store-scoped roles see only their store's revenue.
+    const scope = storeScope(req.role, req.storeId)
     let q = supabase
       .from('sales')
       .select('sale_datetime, total')
       .eq('status', 'active')
       .gte('sale_datetime', start.toISOString())
 
-    // Restrict sales personnel / staff to their store.
-    if ((req.role === 'store_staff' || req.role === 'sales_personnel') && req.storeId) {
-      q = q.eq('store_id', req.storeId)
+    if (scope !== null) {
+      q = q.eq('store_id', scope)
     }
 
     const { data, error } = await q
@@ -205,14 +230,15 @@ router.get(
 
     // Use the daily_sales_summary view to aggregate units + value per product,
     // restricted to active sales within the rolling window.
+    // Store-scoped roles see only their store's products.
+    const scope = storeScope(req.role, req.storeId)
     let q = supabase
       .from('daily_sales_summary')
       .select('product_id, product_name, sku_code, units_sold, sales_value')
       .gte('sale_date', start.toISOString().slice(0, 10))
 
-    // Restrict sales personnel / staff to their store.
-    if ((req.role === 'store_staff' || req.role === 'sales_personnel') && req.storeId) {
-      q = q.eq('store_id', req.storeId)
+    if (scope !== null) {
+      q = q.eq('store_id', scope)
     }
 
     const { data, error } = await q
@@ -265,16 +291,13 @@ router.get(
       .eq('status', 'active')
     if (storesErr) throw new AppError(500, 'Failed to load stores', 'DB_ERROR')
 
-    // Sales personnel / staff see only their own store.
-    const scopedStoreId =
-      (req.role === 'store_staff' || req.role === 'sales_personnel') && req.storeId
-        ? req.storeId
-        : null
+    // Store-scoped roles see only their own store's comparison.
+    const scopedStoreId = storeScope(req.role, req.storeId)
 
     const result = await Promise.all(
       (stores ?? []).map(async (store) => {
         const sid = store.id as string
-        if (scopedStoreId && sid !== scopedStoreId) {
+        if (scopedStoreId !== null && sid !== scopedStoreId) {
           return { store_id: sid, store_name: store.name as string, sales_total: 0 }
         }
 

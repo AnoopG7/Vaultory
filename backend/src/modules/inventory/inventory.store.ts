@@ -207,7 +207,9 @@ export async function queryInventory(
   try {
     let q = db.from('inventory_status').select('*', { count: 'exact' })
 
-    // If store_staff is assigned to a store, filter by their store locations
+    // If a store-scoped role is assigned to a store, filter by their store
+    // locations; if scoped but no store is assigned, scope to nothing rather
+    // than leaking all stores.
     if (callerRole === 'store_staff' && callerStoreId) {
       const { data: storeLocs } = await db
         .from('locations')
@@ -217,6 +219,8 @@ export async function queryInventory(
       if (locIds.length) {
         q = q.in('location_id', locIds)
       }
+    } else if (callerRole === 'store_staff') {
+      q = q.eq('location_id', '00000000-0000-0000-0000-000000000000')
     }
 
     if (query.locationId) {
@@ -277,6 +281,11 @@ export async function queryInventory(
   }
 
   // In-memory fallback
+  // Store-scoped role with no store assigned sees nothing (matches DB path).
+  if (callerRole === 'store_staff' && !callerStoreId) {
+    return { data: [], total: 0 }
+  }
+
   let filtered = [...memoryInventory]
 
   if (query.locationId) {
