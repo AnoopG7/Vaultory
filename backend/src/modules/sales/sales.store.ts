@@ -287,55 +287,89 @@ export async function createSaleTransaction(
   const now = saleDatetime ?? new Date().toISOString()
 
   let dbPersisted = false
+  let dbSaleRecord: LocalSale | null = null
 
-  // Try Supabase insert
+  // Persist to Supabase. Header is inserted with discount 0 (no lines exist
+  // yet, so chk_sale_total demands total = subtotal - discount = 0); discount
+  // and its recompute are applied via UPDATE only after the lines exist.
   if (!isMockSupabase) {
-    try {
-      const { data: dbSale, error: saleError } = await supabase
-        .from('sales')
+    const { data: dbSale, error: saleError } = await supabase
+      .from('sales')
+      .insert({
+        store_id: storeId,
+        sale_datetime: now,
+        discount: 0,
+        notes: notes ?? null,
+        created_by: actor.id ?? null,
+      })
+      .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, created_at')
+      .single()
+
+    if (saleError || !dbSale) {
+      throw new AppError(500, `Failed to create sale: ${saleError?.message ?? 'no sale returned'}`, 'DB_ERROR')
+    }
+
+    const realSaleId = (dbSale as { id: string }).id
+
+    // Insert lines & mutate stock
+    for (const ld of lineDetails) {
+      const { data: sLine, error: sLineError } = await supabase
+        .from('sale_lines')
         .insert({
-          store_id: storeId,
-          sale_datetime: now,
-          discount: effectiveDiscount,
-          notes: notes ?? null,
-          created_by: actor.id ?? null,
+          sale_id: realSaleId,
+          product_id: ld.product_id,
+          qty: ld.qty,
+          unit_price: ld.unit_price,
         })
-        .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, created_at')
+        .select('id')
         .single()
 
-      if (!saleError && dbSale) {
-        const realSaleId = (dbSale as { id: string }).id
-
-        // Insert lines & mutate stock
-        for (const ld of lineDetails) {
-          const { data: sLine } = await supabase
-            .from('sale_lines')
-            .insert({
-              sale_id: realSaleId,
-              product_id: ld.product_id,
-              qty: ld.qty,
-              unit_price: ld.unit_price,
-            })
-            .select('id')
-            .single()
-
-          await supabase.rpc('fn_mutate_stock', {
-            p_product_id: ld.product_id,
-            p_location_id: locationId,
-            p_type: 'sale',
-            p_qty: -ld.qty,
-            p_created_by: actor.id ?? null,
-            p_reason: 'sale',
-            p_sale_id: realSaleId,
-            p_sale_line_id: sLine ? (sLine as { id: string }).id : null,
-          })
-        }
-
-        dbPersisted = true
+      if (sLineError || !sLine) {
+        throw new AppError(500, `Failed to persist sale line: ${sLineError?.message ?? 'no line returned'}`, 'DB_ERROR')
       }
-    } catch {
-      // Fallback to in-memory store
+
+      const { error: stockError } = await supabase.rpc('fn_mutate_stock', {
+        p_product_id: ld.product_id,
+        p_location_id: locationId,
+        p_type: 'sale',
+        p_qty: -ld.qty,
+        p_created_by: actor.id ?? null,
+        p_reason: 'sale',
+        p_sale_id: realSaleId,
+        p_sale_line_id: (sLine as { id: string }).id,
+      })
+      if (stockError) {
+        throw new AppError(500, `Failed to update stock: ${stockError.message}`, 'DB_ERROR')
+      }
     }
+
+    // Apply discount now that lines exist so the recompute trigger can total it.
+    if (effectiveDiscount > 0) {
+      const { error: discountError } = await supabase
+        .from('sales')
+        .update({ discount: effectiveDiscount })
+        .eq('id', realSaleId)
+      if (discountError) {
+        throw new AppError(500, `Failed to apply discount: ${discountError.message}`, 'DB_ERROR')
+      }
+    }
+
+    const { data: finalSale, error: finalError } = await supabase
+      .from('sales')
+      .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, voided_at, void_reason, created_at')
+      .eq('id', realSaleId)
+      .single()
+
+    if (finalError || !finalSale) {
+      throw new AppError(500, `Failed to reload created sale: ${finalError?.message ?? 'no sale returned'}`, 'DB_ERROR')
+    }
+
+    dbSaleRecord = {
+      ...(finalSale as LocalSale),
+      voided_by: null,
+      updated_at: now,
+    }
+    dbPersisted = true
   }
 
   // Deduct stock in memory store
@@ -343,7 +377,7 @@ export async function createSaleTransaction(
     mutateMemoryStock(ld.product_id, locationId, -ld.qty)
   }
 
-  const createdSale: LocalSale = {
+  const createdSale: LocalSale = dbSaleRecord ?? {
     id: saleId,
     sale_number: saleNumber,
     store_id: storeId,
@@ -369,7 +403,7 @@ export async function createSaleTransaction(
     const p = memoryInventory.find((i) => i.product_id === ld.product_id)
     memorySaleLines.push({
       id: `sl-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      sale_id: saleId,
+      sale_id: createdSale.id,
       product_id: ld.product_id,
       qty: ld.qty,
       unit_price: ld.unit_price,
@@ -386,10 +420,10 @@ export async function createSaleTransaction(
     actorRole: actor.role ?? null,
     action: 'sale_created',
     entity: 'sale',
-    entityId: saleId,
+    entityId: createdSale.id,
     detail: {
-      sale_number: saleNumber,
-      store_id: storeId,
+      sale_number: createdSale.sale_number,
+      store_id: createdSale.store_id,
       items_count: lineDetails.length,
       total_qty: computedTotalQty,
       subtotal: computedSubtotal,
@@ -417,30 +451,27 @@ export async function querySales(params: {
   offset?: number
 }): Promise<{ sales: LocalSale[]; total: number }> {
   if (!isMockSupabase) {
-    try {
-      let query = supabase
-        .from('sales')
-        .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, voided_at, void_reason, created_at', { count: 'exact' })
-        .order('sale_datetime', { ascending: false })
+    let query = supabase
+      .from('sales')
+      .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, voided_at, void_reason, created_at', { count: 'exact' })
+      .order('sale_datetime', { ascending: false })
 
-      if (params.store_id) query = query.eq('store_id', params.store_id)
-      if (params.status) query = query.eq('status', params.status)
-      if (params.from) query = query.gte('sale_datetime', params.from)
-      if (params.to) query = query.lte('sale_datetime', params.to)
+    if (params.store_id) query = query.eq('store_id', params.store_id)
+    if (params.status) query = query.eq('status', params.status)
+    if (params.from) query = query.gte('sale_datetime', params.from)
+    if (params.to) query = query.lte('sale_datetime', params.to)
 
-      const offset = params.offset ?? 0
-      const limit = params.limit ?? 50
-      query = query.range(offset, offset + limit - 1)
+    const offset = params.offset ?? 0
+    const limit = params.limit ?? 50
+    query = query.range(offset, offset + limit - 1)
 
-      const { data, count, error } = await query
-      if (!error && data && data.length > 0) {
-        return {
-          sales: data as LocalSale[],
-          total: count ?? data.length,
-        }
-      }
-    } catch {
-      // Fallback
+    const { data, count, error } = await query
+    if (error) {
+      throw new AppError(500, `Failed to load sales: ${error.message}`, 'DB_ERROR')
+    }
+    return {
+      sales: (data ?? []) as LocalSale[],
+      total: count ?? (data ?? []).length,
     }
   }
 
@@ -475,47 +506,46 @@ export async function getSaleDetail(id: string): Promise<{
 }> {
   // Try Supabase first
   if (!isMockSupabase) {
-    try {
-      const { data: sale, error: saleError } = await supabase
-        .from('sales')
-        .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, voided_at, void_reason, created_at')
-        .eq('id', id)
-        .maybeSingle()
+    const { data: sale, error: saleError } = await supabase
+      .from('sales')
+      .select('id, sale_number, store_id, sale_datetime, total_items, total_qty, subtotal, discount, total, status, notes, voided_at, void_reason, created_at')
+      .eq('id', id)
+      .maybeSingle()
 
-      if (!saleError && sale) {
-        const { data: lines } = await supabase
-          .from('sale_lines')
-          .select('id, product_id, qty, unit_price, line_total, products(sku_code, name)')
-          .eq('sale_id', id)
-          .order('created_at', { ascending: true })
+    if (saleError) {
+      throw new AppError(500, `Failed to load sale: ${saleError.message}`, 'DB_ERROR')
+    }
+    if (sale) {
+      const { data: lines } = await supabase
+        .from('sale_lines')
+        .select('id, product_id, qty, unit_price, line_total, products(sku_code, name)')
+        .eq('sale_id', id)
+        .order('created_at', { ascending: true })
 
-        const { data: returns } = await supabase
-          .from('sale_returns')
-          .select('*')
-          .eq('sale_id', id)
-          .order('created_at', { ascending: false })
+      const { data: returns } = await supabase
+        .from('sale_returns')
+        .select('*')
+        .eq('sale_id', id)
+        .order('created_at', { ascending: false })
 
-        return {
-          sale: sale as LocalSale,
-          lines: (lines ?? []).map((l) => {
-            const p = Array.isArray(l.products) ? l.products[0] : l.products
-            return {
-              id: String(l.id),
-              sale_id: id,
-              product_id: String(l.product_id),
-              qty: Number(l.qty),
-              unit_price: Number(l.unit_price),
-              line_total: Number(l.line_total),
-              created_at: sale.created_at,
-              products: p ? { sku_code: String(p.sku_code), name: String(p.name) } : null,
-            }
+      return {
+        sale: sale as LocalSale,
+        lines: (lines ?? []).map((l) => {
+          const p = Array.isArray(l.products) ? l.products[0] : l.products
+          return {
+            id: String(l.id),
+            sale_id: id,
+            product_id: String(l.product_id),
+            qty: Number(l.qty),
+            unit_price: Number(l.unit_price),
+            line_total: Number(l.line_total),
+            created_at: sale.created_at,
+            products: p ? { sku_code: String(p.sku_code), name: String(p.name) } : null,
+          }
           }),
           returns: (returns ?? []) as LocalSaleReturn[],
         }
       }
-    } catch {
-      // Fallback
-    }
   }
 
   const foundSale = memorySales.find((s) => s.id === id)
@@ -553,40 +583,83 @@ export async function voidSaleTransaction(
   const now = new Date().toISOString()
   let dbPersisted = false
 
+  // Compute quantities already returned per sale line, so a void only restores
+  // what is still in customer hands (avoids over-crediting inventory).
+  const returnedByLine = new Map<string, number>()
   if (!isMockSupabase) {
-    try {
-      for (const line of saleDetail.lines) {
-        await supabase.rpc('fn_mutate_stock', {
-          p_product_id: line.product_id,
-          p_location_id: locationId,
-          p_type: 'sale_void',
-          p_qty: line.qty,
-          p_created_by: actor.id ?? null,
-          p_reason: `void: ${reason}`,
-          p_sale_id: id,
-          p_sale_line_id: line.id,
-        })
-      }
-
-      const { error: voidError } = await supabase
-        .from('sales')
-        .update({
-          status: 'voided',
-          voided_by: actor.id ?? null,
-          voided_at: now,
-          void_reason: reason,
-        })
-        .eq('id', id)
-
-      if (!voidError) dbPersisted = true
-    } catch {
-      // Fallback
+    const { data: dbReturns, error: returnsError } = await supabase
+      .from('sale_returns')
+      .select('id')
+      .eq('sale_id', id)
+    if (returnsError) {
+      throw new AppError(500, `Failed to load sale returns: ${returnsError.message}`, 'DB_ERROR')
     }
+    const returnIds = (dbReturns ?? []).map((r) => String(r.id))
+    if (returnIds.length > 0) {
+      const { data: rlines, error: rlinesErr } = await supabase
+        .from('sale_return_lines')
+        .select('sale_line_id, qty_returned')
+        .in('return_id', returnIds)
+      if (rlinesErr) {
+        throw new AppError(500, `Failed to load return lines: ${rlinesErr.message}`, 'DB_ERROR')
+      }
+      for (const r of rlines ?? []) {
+        const slId = String(r.sale_line_id)
+        returnedByLine.set(slId, (returnedByLine.get(slId) ?? 0) + Number(r.qty_returned))
+      }
+    }
+  } else {
+    for (const rl of memorySaleReturnLines) {
+      if (memorySaleReturns.some((r) => r.id === rl.return_id && r.sale_id === id)) {
+        returnedByLine.set(rl.sale_line_id, (returnedByLine.get(rl.sale_line_id) ?? 0) + rl.qty_returned)
+      }
+    }
+  }
+
+  const restoreQtyByLine = new Map<string, number>()
+  for (const line of saleDetail.lines) {
+    restoreQtyByLine.set(line.id, Math.max(0, line.qty - (returnedByLine.get(line.id) ?? 0)))
+  }
+
+  if (!isMockSupabase) {
+    for (const line of saleDetail.lines) {
+      const restoreQty = restoreQtyByLine.get(line.id) ?? 0
+      if (restoreQty <= 0) continue
+      const { error: stockError } = await supabase.rpc('fn_mutate_stock', {
+        p_product_id: line.product_id,
+        p_location_id: locationId,
+        p_type: 'sale_void',
+        p_qty: restoreQty,
+        p_created_by: actor.id ?? null,
+        p_reason: `void: ${reason}`,
+        p_sale_id: id,
+        p_sale_line_id: line.id,
+      })
+      if (stockError) {
+        throw new AppError(500, `Failed to restore stock: ${stockError.message}`, 'DB_ERROR')
+      }
+    }
+
+    const { error: voidError } = await supabase
+      .from('sales')
+      .update({
+        status: 'voided',
+        voided_by: actor.id ?? null,
+        voided_at: now,
+        void_reason: reason,
+      })
+      .eq('id', id)
+
+    if (voidError) {
+      throw new AppError(500, `Failed to void sale: ${voidError.message}`, 'DB_ERROR')
+    }
+    dbPersisted = true
   }
 
   // In-memory stock restoration
   for (const line of saleDetail.lines) {
-    mutateMemoryStock(line.product_id, locationId, line.qty)
+    const restoreQty = restoreQtyByLine.get(line.id) ?? 0
+    if (restoreQty > 0) mutateMemoryStock(line.product_id, locationId, restoreQty)
   }
 
   const memSale = memorySales.find((s) => s.id === id)
@@ -642,9 +715,34 @@ export async function processSaleReturnTransaction(
   const now = new Date().toISOString()
 
   // Verify return lines and quantities against original sale lines and previous returns
-  const previousReturns = memorySaleReturnLines.filter((rl) =>
-    memorySaleReturns.some((r) => r.id === rl.return_id && r.sale_id === saleId),
-  )
+  let previousReturns: LocalSaleReturnLine[] = []
+  if (!isMockSupabase) {
+    const { data: dbReturns, error: returnsError } = await supabase
+      .from('sale_returns')
+      .select('id')
+      .eq('sale_id', saleId)
+    if (returnsError) {
+      throw new AppError(500, `Failed to load sale returns: ${returnsError.message}`, 'DB_ERROR')
+    }
+    const returnIds = (dbReturns ?? []).map((r) => String(r.id))
+    if (returnIds.length > 0) {
+      const { data: rlines, error: rlinesErr } = await supabase
+        .from('sale_return_lines')
+        .select('sale_line_id, qty_returned')
+        .in('return_id', returnIds)
+      if (rlinesErr) {
+        throw new AppError(500, `Failed to load return lines: ${rlinesErr.message}`, 'DB_ERROR')
+      }
+      previousReturns = (rlines ?? []).map((r) => ({
+        sale_line_id: String(r.sale_line_id),
+        qty_returned: Number(r.qty_returned),
+      })) as LocalSaleReturnLine[]
+    }
+  } else {
+    previousReturns = memorySaleReturnLines.filter((rl) =>
+      memorySaleReturns.some((r) => r.id === rl.return_id && r.sale_id === saleId),
+    )
+  }
 
   const returnLinesProcessed: LocalSaleReturnLine[] = []
   let totalRefund = 0
@@ -689,53 +787,57 @@ export async function processSaleReturnTransaction(
   totalRefund = Number(totalRefund.toFixed(2))
   let dbPersisted = false
 
-  // Try Supabase insert
+  // Persist return to Supabase
   if (!isMockSupabase) {
-    try {
-      const { data: dbReturn, error: returnError } = await supabase
-        .from('sale_returns')
-        .insert({
-          sale_id: saleId,
-          store_id: saleDetail.sale.store_id,
-          return_datetime: now,
-          reason,
-          refund_amount: totalRefund,
-          created_by: actor.id ?? null,
-          notes: notes ?? null,
-        })
-        .select('*')
-        .single()
+    const { data: dbReturn, error: returnError } = await supabase
+      .from('sale_returns')
+      .insert({
+        sale_id: saleId,
+        store_id: saleDetail.sale.store_id,
+        return_datetime: now,
+        reason,
+        refund_amount: totalRefund,
+        created_by: actor.id ?? null,
+        notes: notes ?? null,
+      })
+      .select('*')
+      .single()
 
-      if (!returnError && dbReturn) {
-        const realReturnId = (dbReturn as { id: string }).id
-
-        for (const rl of returnLinesProcessed) {
-          await supabase.from('sale_return_lines').insert({
-            return_id: realReturnId,
-            sale_line_id: rl.sale_line_id,
-            product_id: rl.product_id,
-            qty_returned: rl.qty_returned,
-            unit_price: rl.unit_price,
-          })
-
-          await supabase.rpc('fn_mutate_stock', {
-            p_product_id: rl.product_id,
-            p_location_id: locationId,
-            p_type: 'sale_return',
-            p_qty: rl.qty_returned,
-            p_created_by: actor.id ?? null,
-            p_reason: `return: ${reason}`,
-            p_sale_id: saleId,
-            p_sale_line_id: rl.sale_line_id,
-            p_return_id: realReturnId,
-          })
-        }
-
-        dbPersisted = true
-      }
-    } catch {
-      // Fallback
+    if (returnError || !dbReturn) {
+      throw new AppError(500, `Failed to persist return: ${returnError?.message ?? 'no return returned'}`, 'DB_ERROR')
     }
+
+    const realReturnId = (dbReturn as { id: string }).id
+
+    for (const rl of returnLinesProcessed) {
+      const { error: lineErr } = await supabase.from('sale_return_lines').insert({
+        return_id: realReturnId,
+        sale_line_id: rl.sale_line_id,
+        product_id: rl.product_id,
+        qty_returned: rl.qty_returned,
+        unit_price: rl.unit_price,
+      })
+      if (lineErr) {
+        throw new AppError(500, `Failed to persist return line: ${lineErr.message}`, 'DB_ERROR')
+      }
+
+      const { error: stockError } = await supabase.rpc('fn_mutate_stock', {
+        p_product_id: rl.product_id,
+        p_location_id: locationId,
+        p_type: 'sale_return',
+        p_qty: rl.qty_returned,
+        p_created_by: actor.id ?? null,
+        p_reason: `return: ${reason}`,
+        p_sale_id: saleId,
+        p_sale_line_id: rl.sale_line_id,
+        p_return_id: realReturnId,
+      })
+      if (stockError) {
+        throw new AppError(500, `Failed to restore returned stock: ${stockError.message}`, 'DB_ERROR')
+      }
+    }
+
+    dbPersisted = true
   }
 
   // In-memory stock restoration
@@ -796,28 +898,25 @@ export async function querySaleReturns(params: {
   offset?: number
 }): Promise<{ returns: LocalSaleReturn[]; total: number }> {
   if (!isMockSupabase) {
-    try {
-      let query = supabase
-        .from('sale_returns')
-        .select('id, sale_id, store_id, return_datetime, reason, refund_amount, created_at, notes', { count: 'exact' })
-        .order('return_datetime', { ascending: false })
+    let query = supabase
+      .from('sale_returns')
+      .select('id, sale_id, store_id, return_datetime, reason, refund_amount, created_at, notes', { count: 'exact' })
+      .order('return_datetime', { ascending: false })
 
-      if (params.sale_id) query = query.eq('sale_id', params.sale_id)
-      if (params.store_id) query = query.eq('store_id', params.store_id)
+    if (params.sale_id) query = query.eq('sale_id', params.sale_id)
+    if (params.store_id) query = query.eq('store_id', params.store_id)
 
-      const offset = params.offset ?? 0
-      const limit = params.limit ?? 50
-      query = query.range(offset, offset + limit - 1)
+    const offset = params.offset ?? 0
+    const limit = params.limit ?? 50
+    query = query.range(offset, offset + limit - 1)
 
-      const { data, count, error } = await query
-      if (!error && data && data.length > 0) {
-        return {
-          returns: data as LocalSaleReturn[],
-          total: count ?? data.length,
-        }
-      }
-    } catch {
-      // Fallback
+    const { data, count, error } = await query
+    if (error) {
+      throw new AppError(500, `Failed to load sale returns: ${error.message}`, 'DB_ERROR')
+    }
+    return {
+      returns: (data ?? []) as LocalSaleReturn[],
+      total: count ?? (data ?? []).length,
     }
   }
 
