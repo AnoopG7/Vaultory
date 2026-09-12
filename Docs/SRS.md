@@ -60,6 +60,11 @@
 
 ## 1. Introduction
 
+<figure>
+  <a href="https://github.com/AnoopG7/Vaultory/blob/main/Docs/Architecture-diagram.png"><img src="Architecture-diagram.png" alt="Vaultory System Architecture" /></a>
+  <figcaption>Figure 1 — Vaultory System Architecture — <a href="https://github.com/AnoopG7/Vaultory/blob/main/Docs/Architecture-diagram.png">view image on GitHub</a></figcaption>
+</figure>
+
 ### 1.1 Purpose
 This Software Requirements Specification (SRS) describes in technical detail **what the Vaultory application must do** so the development team (Tech Lead + team) can design, code, and test it, and the client can confirm the behavior. It is derived from, and fully consistent with, the **BRD v3.4**. Every requirement in the BRD is traced to a technical specification here (see Section 14).
 
@@ -106,13 +111,10 @@ Convention: **Implemented** = behaviour is live in the current build; **Partial*
 ### 2.1 Product Perspective
 Vaultory is an independent, self-contained web application. It does **not** integrate with external systems in this version (BRD §9). It consists of:
 
-```
-[ React SPA (Vercel) ]  <->  [ REST API + AI service (Render: Node.js) ]  <->  [ Supabase ]
-                                                                    (PostgreSQL + Auth + Storage)
-                                                                          |
-                                                                          v
-                                                       [ Groq API (LLM reasoning / forecasting) ]
-```
+<figure>
+  <img src="diagrams/01-system-context.svg" alt="Vaultory System Context" />
+  <figcaption>Figure 2 — Vaultory System Context (frontend ↔ API ↔ Supabase ↔ Groq)</figcaption>
+</figure>
 
 ### 2.2 User Classes & Characteristics
 | Class | Description | Skill Level |
@@ -330,6 +332,11 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 - `GET /api/stores` is **public** to feed the signup store dropdown (non-sensitive reference data); `/locations` and `/products` stay behind auth.
 - Session: Supabase-issued **JWT (access token)** validated by the **Node backend** role middleware on every protected route; refresh token handled by Supabase.
 - Logout invalidates the Supabase session; role-aware redirect after login; rate-limit/lockout configured in **Supabase Auth** settings.
+
+<figure>
+  <img src="diagrams/02-signup-auth-flow.svg" alt="Signup & Authentication Flow" />
+  <figcaption>Figure 3 — Self-Service Signup & Authentication Flow</figcaption>
+</figure>
 
 #### 4.6.2 FR-USER-02 — Roles & Permissions
 - Roles ENUM: `ADMIN`, `STORE_STAFF`, `SALES_PERSONNEL`, `SENIOR_STAKEHOLDER` (DB enum `user_role`; profile defaults to `store_staff`).
