@@ -13,7 +13,9 @@ const router = Router()
 
 /**
  * Reference data endpoints backing the sales & dashboard UIs:
- *  - GET /api/stores     — active stores (store selector on sales form, exec dashboard)
+ *  - GET /api/stores     — active stores (store selector on sales form, exec dashboard,
+ *                           and the PUBLIC signup store dropdown; store names are
+ *                           non-sensitive reference data)
  *  - GET /api/products   — active products (line-item selector on sales form)
  *
  * These are lightweight dropdown/list sources; detailed CRUD lives in the
@@ -21,11 +23,10 @@ const router = Router()
  */
 
 // ---------------------------------------------------------------------------
-// GET /api/stores — list active stores
+// GET /api/stores — list active stores (public: used by signup before auth)
 // ---------------------------------------------------------------------------
 router.get(
   '/stores',
-  requireAuth,
   asyncHandler(async (_req, res) => {
     const { data, error } = await supabase
       .from('stores')

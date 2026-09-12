@@ -4,7 +4,7 @@
 
 | **Document ID** | SRS-VAULTORY-001 |
 |---|---|
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Status** | Draft for Review & Sign-off |
 | **Prepared By** | Anoop (Solutions Architect) — Vaultory |
 | **Date** | 29/08/2026 |
@@ -19,6 +19,7 @@
 |---|---|---|---|
 | 1.0 | 29/08/2026 | Anoop (Solutions Architect) | Initial SRS derived from BRD v3.3 |
 | 1.1 | 29/08/2026 | Anoop (Solutions Architect) | Locked stack per BRD v3.4: React+Tailwind+shadcn/ui, Node.js backend + AI via Groq API, Supabase (Postgres/Auth incl. email OTP/Storage); resolved TBD-1 (Node) & TBD-2 (shadcn + Recharts) |
+| 1.2 | 12/09/2026 | Anoop (Solutions Architect) | Synced with implemented behavior + DB schema v1.5 (`profiles` table, fractional quantities, PO receipts/returns, self-service signup, DB-first reports via views); added implementation-status summary (§1.4), updated auth/sales/PO/masking/indexes/TBD sections |
 
 ---
 
@@ -80,6 +81,23 @@ Vaultory is a web-based inventory and sales management application for a small r
 - **Development team** — to implement and test.
 - **QA / UAT** — to verify acceptance criteria.
 - **PM / SM** — to estimate and plan (feeds the Sprint Planner).
+
+### 1.4 Implementation Status (v1.2)
+
+Convention: **Implemented** = behaviour is live in the current build; **Partial** = core path live, value-add pending; **Planned** = specified here but not yet delivered (tracked in §15).
+
+| Module | Status | Notes |
+|---|---|---|
+| Auth (email/password + JWT, OTP, forgot/reset) | **Implemented** | Public self-service signup `POST /api/auth/signup` always creates **`store_staff`** with a **required store** (server-side role clamp); Admin reassigns roles via the Users page. `GET /api/stores` is **public** to feed the signup dropdown. |
+| Inventory (products/mask, categories, units, locations) | **Implemented** | Full-stack CRUD + tests; `cost_price` masking centralized in one utility (§7). |
+| Stock (in/out/transfer/adjust, status view) | **Implemented** | Atomic `fn_mutate_stock()`; immutable `stock_movements` audit; `compute_stock_status()` + `inventory_status` view. |
+| Sales recording, returns, void | **Implemented** | Persistent via DB triggers; structured `sale_returns` / `sale_return_lines`. |
+| Sales reports (day / qtr / year, store performance) | **Implemented** | DB-first: `daily_sales_summary` view (UTC); quarterly/yearly/store-performance aggregate queries. |
+| Safety stock rules & alerts | **Implemented** | Rules + `alerts` module live; AI-triggered alert generation pending. |
+| Suppliers & PO lifecycle | **Implemented** | PO numbering (`generate_po_number()`), atomic receipt (`fn_receive_po()`), per-delivery receipts history. |
+| RBAC / data masking / store scoping | **Implemented** | Store-scoped dashboards, inventory and POs; masking via one shared utility. |
+| AI ordering & warehouse recommendations (Groq) | **Planned** | Workflow specified in §8; Groq integration scheduled Sprint 3 (§15 TBD-7). |
+| Value-adds: bulk import/export, onboarding wizard, email alerts | **Partial / Planned** | Schema-ready (`is_perishable`, `alerts`, audit); delivery depends on sprint capacity (§15). |
 
 ---
 
@@ -145,7 +163,7 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 ### 4.1 MODULE: Inventory Management
 
 #### 4.1.1 FR-INV-01 — Product (SKU) Master
-- **Fields:** `sku_code` (unique, required, max 32 chars, auto-suggest pattern `[P]<category>-<seq>`), `name` (required, max 120), `description` (optional, max 500), `category_id` (FK), `unit_id` (FK), `cost_price` (masked, decimal(12,2)), `sale_price` (decimal(12,2)), `default_safety_stock`, `default_reorder_point`, `default_target_level` (integers ≥0), `status` (active/archived), timestamps.
+- **Fields:** `sku_code` (unique CITEXT), `name`, `description`, `category_id` (FK, required), `unit_id` (FK, required), `cost_price` (masked, NUMERIC(14,2)), `sale_price` (NUMERIC(14,2)), `default_safety_stock` / `default_reorder_point` / `default_target_level` (NUMERIC(12,3) ≥ 0), `is_perishable` + `shelf_life_days`, `status` (active/archived), timestamps + `created_by`.
 - **Validation rules:**
   - `sku_code` unique — reject duplicates with error.
   - `sale_price ≥ 0`, `cost_price ≥ 0`, `target ≥ reorder ≥ safety`.
@@ -163,16 +181,18 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 - Table `inventory`: composite unique `(product_id, location_id)`, `qty_on_hand` (integer, ≥0).
 - Every transaction (stock-in/out/transfer/adjustment/sale) writes a `stock_movements` audit row and updates `qty_on_hand` accordingly.
 - Stock view (read-only for authorized roles) returns: on-hand, reorder_point, safety_stock, target_level, status badge.
-- **Status logic:**
-  - `OUT` : qty == 0
-  - `LOW`: 0 < qty ≤ reorder_point
-  - `IN`: reorder_point < qty ≤ target_level
-  - `OVER`: qty > target_level
+- **Status logic** — computed by `compute_stock_status(qty, reorder, target)` (exposed via the `inventory_status` view); enum `stock_status`:
+  - `out_of_stock` : qty == 0
+  - `low`          : 0 < qty ≤ reorder_point
+  - `in_stock`     : reorder_point < qty ≤ target_level (any qty when target = 0)
+  - `over_stock`   : qty > target_level (target > 0)
+- Level fallback: location-specific `safety_stock_rules` override product defaults (COALESCE in `inventory_status`).
+- **All mutations go through `fn_mutate_stock()`** — one transaction that updates `inventory`, writes an immutable `stock_movements` row (with `qty_before`/`qty_after`), and refreshes timestamps. UPDATE/DELETE on `stock_movements` are blocked by trigger.
 
 #### 4.1.4 FR-INV-04 — Stock-In
 - Input: `product_id`, `qty > 0`, `destination_location_id`, optional `po_id`, optional notes.
 - Effect: `qty_on_hand += qty` at destination; if `po_id`, update PO received status (FR-PRO-05).
-- Guard: destination active; qty integer > 0.
+- Guard: destination active; qty > 0 (fractional units supported).
 
 #### 4.1.5 FR-INV-05 — Stock-Out
 - Input: `product_id`, `qty > 0`, `source_location_id`, `reason` (damage/loss/other), notes.
@@ -197,29 +217,32 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 ### 4.2 MODULE: Sales Management
 
 #### 4.2.1 FR-SAL-01 — Sale Recording
-- Input: `store_id`, `sale_datetime` (server time default), line items: `[{product_id, qty>0, unit_price}]`.
+- Input: `store_id`, `sale_datetime` (server time default), optional `discount ≥ 0`, line items: `[{productId, qty>0, unitPrice}]` (client-sent totals ignored; server recomputes).
+- Human-readable number: `sale_number` auto `SAL-<YYYY>-<seq>` from `generate_sale_number()` (sequence `sale_number_seq`); the `sales_assign_sale_number` trigger fills it when the caller omits it.
 - Rules:
-  - ≥1 line item required.
-  - `line_total = qty × unit_price`; `sale.total = Σ line_total` (server computed; client-sent totals ignored).
-  - **Stock deduction:** for each line, `inventory.qty_on_hand -= qty` at the sale's store.
+  - ≥1 line item required; `store_id` must reference a real store (trigger-checked).
+  - `line_total = qty × unit_price` (generated column); `subtotal = Σ line_total`, `total = subtotal − discount` — maintained by recompute triggers; CHECK enforces `total ≥ 0`, `discount ≥ 0`, `total = subtotal − discount`.
+  - **Stock deduction:** for each line, stock is decremented **atomically** at the sale's store via `fn_mutate_stock(type='sale', qty < 0)` (writes `qty_before`/`qty_after` + immutable movement).
   - If qty > on-hand → **block** by default (`409 INSUFFICIENT_STOCK`); identifies which product.
-  - Sale is immutable after creation except void (FR-SAL-04).
-- Audit: each sale + stock movement recorded.
+  - Sale is immutable after creation except void (FR-SAL-04); quantities support fractional units (`NUMERIC(12,3)`).
+- Audit: each sale (`sale_created`) + stock movement recorded.
 
 #### 4.2.2 FR-SAL-02 — Sales Reports (Day / Quarter / Year)
-- Endpoints/reports:
-  - **Daily:** filter `store_id, product_id, date`.
-  - **Quarterly:** filter `store_id, product_id, quarter (YYYY-Qq)`.
-  - **Yearly:** filter `store_id, product_id, year (YYYY)`.
+- Endpoints/reports (all **DB-first** — computed by Postgres queries, not from in-memory state):
+  - **Daily:** `daily_sales_summary` view — `(sale_datetime AT TIME ZONE 'UTC')::DATE` grouping by store + product (timezone-safe; filters `store_id, product_id, date` applied over the view).
+  - **Quarterly:** filter `store_id, product_id, quarter (YYYY-Qq)` — aggregate over `sales` + `sale_lines`.
+  - **Yearly:** filter `store_id, product_id, year (YYYY)` — aggregate over `sales` + `sale_lines`.
+  - **Store performance:** per-store aggregates (`sales` joined to `stores`), underlying `idx_sales_store_datetime` + `idx_sales_date_utc` indexes.
 - Output metrics: `units_sold`, `sales_value`, grouped by store and product; sortable; export CSV/PDF.
-- Auto-generation: daily summary snapshot stored; quarterly & yearly aggregate queries on demand.
+- Voided sales are excluded (`WHERE status = 'active'`); returned qty reduces net via return records.
 
 #### 4.2.3 FR-SAL-03 — Store-wise Performance
 - Sales personnel view: per-store dashboard (value, units, period); side-by-side store comparison; top products per store.
 
 #### 4.2.4 FR-SAL-04 — Void / Returns
-- **Void:** only authorized users (Admin); require `reason`. Effect: reverse stock (`+= qty`), exclude sale from totals, mark `status=voided`, audit log.
-- **Return:** recorded as negative sale line: stock increases, sales totals reduce; reason captured.
+- **Void:** only authorized users (Admin); require `reason`. Effect: sale marked `status=voided` with `voided_by`/`voided_at`/`void_reason` (CHECK-constrained) and excluded from report totals; stock restored **only for un-returned quantities** (already-returned lines are not re-credited, preventing over-stock); audit log `sale_voided`. Voiding a sale that already has a full line return is rejected (`RETURN_EXCEEDS_SOLD` logic) where applicable.
+- **Return:** structured records `sale_returns` (header: `sale_id`, `store_id` must match the sale's store — trigger-checked, `reason`, `refund_amount` recomputed from lines by trigger) + `sale_return_lines` (each line references the original `sale_line_id`, `product_id` must match that line's product, total returned per sale line cannot exceed what was sold). Effect: stock restored via `fn_mutate_stock(type='sale_return', qty > 0)`; net sales totals reduce; `reason` captured. Returns against a **voided** sale are rejected (`SALE_IS_VOIDED`).
+- **Persistence:** sale numbers, totals, returns, and void transitions are enforced **persistently via DB triggers/constraints** (not only in app code); `stock_movements` records carry `sale_id`/`sale_line_id`/`return_id` references.
 
 ### 4.3 MODULE: Safety Stock Management
 
@@ -239,9 +262,10 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 - Mapping: `supplier_products(product_id, supplier_id)` many-to-many.
 
 #### 4.4.2 FR-PRO-02 / FR-PRO-03 — Purchase Order (Manual & Auto)
-- PO fields: `po_number` (auto `PO-<YYYY>-<seq>`), `supplier_id`, `destination_id`, `status`, `order_date`, `expected_date = order_date + lead_time_days`, line items `{product_id, qty, received_qty}`.
-- **Auto-PO** generated by AI flow (Section 8.1).
-- **Manual PO** created by authorized user with validated qty > 0.
+- PO fields: `po_number` (auto `PO-<YYYY>-<seq>` from `generate_po_number()` / `po_number_seq`), `supplier_id`, `destination_id`, `source ENUM(manual, ai_auto)`, `status`, `order_date`, `expected_date = order_date + lead_time_days`, line items `{product_id, qty_ordered, qty_received}` (denormalized header totals `total_items`/`total_qty_ordered`/`total_qty_received`/`total_cost` maintained by `trigger_po_recompute_totals()`).
+- **Auto-PO** generated by AI flow (Section 8.1); only one `is_preferred` supplier per product (partial unique index) drives deterministic selection.
+- **Manual PO** created by authorized user with validated qty > 0; unique `(po_id, product_id)` line constraint.
+- An open-PO partial index (`idx_po_open`) supports duplicate prevention (FR-PRO-06) and open-orders queries.
 
 #### 4.4.3 FR-PRO-04 — PO Lifecycle
 - Status flow:
@@ -250,9 +274,9 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 - State transitions logged (actor, timestamp, old, new).
 
 #### 4.4.4 FR-PRO-05 — PO Receipt
-- Goods-in against PO: `received_qty` per line; stock increase at destination.
-- If all lines fully received → `RECEIVED`; partial → `PARTIALLY_RECEIVED`.
-- Over-receipt guard: `received_qty + previous_received ≤ qty`.
+- Goods-in is recorded as **per-delivery receipts**: each receipt creates a `po_receipts` header (batch/history) + `po_receipt_lines` (what actually arrived), increments `po_lines.qty_received` **by the delta**, and adds stock at the PO destination — all in one atomic transaction via **`fn_receive_po()`** (locks the PO line, validates product/PO/destination match, requires `earliest_expiry_date` for perishables).
+- Over-receipt guard: CHECK `qty_received ≤ qty_ordered` on the line + composite FKs tie every receipt line to the same PO as both its receipt and its PO line (cross-PO integrity).
+- If all lines fully received → `RECEIVED`; partial → `PARTIALLY_RECEIVED`; receipt history remains visible per delivery.
 
 #### 4.4.5 FR-PRO-06 — Duplicate Prevention
 - Auto-PO suppressed if an open (non-closed/cancelled) PO for same `(product_id, destination_id)` already exists, unless config override.
@@ -301,17 +325,16 @@ Identical to BRD §9 — L-1 through L-21 (no mobile apps, ecommerce, payments, 
 ### 4.6 MODULE: User Management & RBAC
 
 #### 4.6.1 FR-USER-01 — Authentication
-- Login via **Supabase Auth**: **email/password** and **email OTP (magic link)** passwordless sign-in, both enabled.
-- Email OTP: Supabase sends a one-time code / magic link to the user's email; code expires per Supabase config (default 3–10 min) and is single-use.
-- Passwords and OTP handling are managed by **Supabase Auth** (not implemented in the Node backend).
-- Session: Supabase-issued **JWT (access token)** validated by the **Node backend** role middleware on every protected route; refresh token handled by Supabase (default 1-hour access + refresh lifecycle).
-- Logout invalidates the Supabase session.
-- Rate-limit / lockout: configure in **Supabase Auth** settings (e.g., max failed attempts before cooldown).
+- Identity provider: **Supabase Auth** (**email/password + email OTP (magic link)**), accessed through backend endpoints: `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/otp` (+ `/verify-otp`), `/forgot-password`, `/reset-password`, disabled in-app role selection — role is assigned server-side.
+- **Self-service signup** (`POST /api/auth/signup`, **public**): always creates a **`store_staff`** profile with a **required `storeId`** (server-side clamp — a client-supplied role is ignored). Administrator reassigns roles/stores later via the Users page.
+- `GET /api/stores` is **public** to feed the signup store dropdown (non-sensitive reference data); `/locations` and `/products` stay behind auth.
+- Session: Supabase-issued **JWT (access token)** validated by the **Node backend** role middleware on every protected route; refresh token handled by Supabase.
+- Logout invalidates the Supabase session; role-aware redirect after login; rate-limit/lockout configured in **Supabase Auth** settings.
 
 #### 4.6.2 FR-USER-02 — Roles & Permissions
-- Roles ENUM: `ADMIN`, `STORE_STAFF`, `SALES_PERSONNEL`, `SENIOR_STAKEHOLDER`.
+- Roles ENUM: `ADMIN`, `STORE_STAFF`, `SALES_PERSONNEL`, `SENIOR_STAKEHOLDER` (DB enum `user_role`; profile defaults to `store_staff`).
 - Protect **server-side** every route/method per BRD §12 matrix. Client hides menus; server enforces.
-- User has optional `store_id` (store staff scoped to their store).
+- Profile (`profiles` table, linked to `auth.uid()`) has `store_id`; store-bound roles (Store Staff / Sales / Admin) are scoped to their store — dashboards, inventory, sales and POs are filtered by store.
 
 #### 4.6.3 FR-USER-03 — User Administration (Admin only)
 - CRUD users (name, email, role, store, password reset), activate/deactivate.
@@ -341,46 +364,79 @@ None (no POS, scanners, printers — BRD L-4).
 
 ### 6.1 Schema (PostgreSQL via Supabase)
 
-> **Auth note:** user authentication/sessions live in **Supabase Auth** (`auth.users`), which also issues the OTP/magic-link and JWT tokens. The application `users` table below is the **profile/role table**, linked to the Supabase auth user (e.g., by `auth.uid()`), storing `role`, `store_id`, and status for RBAC.
+> **Auth note:** user authentication/sessions live in **Supabase Auth** (`auth.users`), which also issues the OTP/magic-link and JWT tokens. The application `profiles` table below is the **profile/role table**, linked to the Supabase auth user (`id = auth.uid()`, FK with `ON DELETE RESTRICT`), storing `role`, `store_id`, and status for RBAC.
 
 ```
-users            (id UUID PK = auth.uid(), name, role ENUM, store_id FK?, status, created_at, updated_at)  -- profile/role; auth in Supabase auth.users
-stores           (id, name, city, address, status)
-warehouses       (id, name, address, status)
-locations        (id, type ENUM(store,warehouse), store_id?, warehouse_id?, status)   -- unified view
-categories       (id, name, parent_id?, status)
-units            (id, name)
-products         (id, sku_code UNIQUE, name, description, category_id FK, unit_id FK,
-                  cost_price DECIMAL(12,2) MASKED, sale_price DECIMAL(12,2), status, created_at)
-suppliers        (id, name, contact_person, phone, email, address, lead_time_days, status)
-supplier_products(supplier_id FK, product_id FK, PRIMARY KEY(supplier_id, product_id))
-inventory        (product_id FK, location_id FK, qty_on_hand INT, PRIMARY KEY(product_id, location_id))
-safety_stock_rules(product_id FK, location_id FK?, safety_stock INT, reorder_point INT,
-                  target_level INT, auto_order_enabled BOOL)
-purchase_orders  (id, po_number UNIQUE, supplier_id FK, destination_id FK, status ENUM, order_date,
-                  expected_date, received_date?, created_by FK, approved_by FK?)
-po_lines         (id, po_id FK, product_id FK, qty INT, received_qty INT DEFAULT 0)
-sales            (id, store_id FK, sale_datetime, total DECIMAL(12,2), status ENUM(active,voided), created_by FK)
-sale_lines       (id, sale_id FK, product_id FK, qty INT, unit_price DECIMAL(12,2), line_total DECIMAL(12,2))
-stock_movements  (id, product_id FK, location_id FK, type ENUM(in,out,transfer,adjust,sale_refund),
-                  qty INT, ref?, reason?, created_by FK, created_at)   -- audit
-alerts           (id, type ENUM, product_id?, location_id?, message, target_role ENUM, read BOOL, created_at)
-ai_recommendations(id, product_id FK, location_id FK, type ENUM(warehouse_level, safety_stock),
-                   recommended_value INT, reasoning TEXT, accepted STatus, created_at)
-audit_logs       (id, actor_id FK, action, entity, entity_id?, detail JSON, created_at)
+profiles         (id UUID PK = auth.users.id, email CITEXT, full_name, role user_role DEFAULT 'store_staff',
+                  store_id FK? → stores, gender, phone, status, last_login_at, created_at, updated_at)
+                   -- profile/role; auth (hashed password, sessions) in Supabase auth.users
+stores           (id, code CITEXT UNIQUE, name, city, state, address, phone, email, status)
+locations        (id, type ENUM(store,warehouse), store_id? FK → stores, code, name, is_default, status)
+categories       (id, name, parent_id?, sort_order, status)                    -- tree; cycle-guard trigger
+units            (id, name UNIQUE, abbreviation, status)
+products         (id, sku_code CITEXT UNIQUE, name, description, category_id FK, unit_id FK,
+                  cost_price NUMERIC(14,2) MASKED, sale_price NUMERIC(14,2),
+                  default_safety_stock / default_reorder_point / default_target_level NUMERIC(12,3),
+                  is_perishable, shelf_life_days, status, created_by)
+suppliers        (id, name, code, contact_person, phone, email, address, lead_time_days,
+                  payment_terms MASKED, credit_limit MASKED, total_pos, on_time_deliveries,
+                  avg_lead_time_days, status)
+supplier_products(supplier_id FK, product_id FK, unit_cost MASKED, lead_time_override,
+                  is_preferred, PRIMARY KEY(supplier_id, product_id))          -- ≤1 preferred per product
+inventory        (product_id FK, location_id FK, qty_on_hand NUMERIC(12,3), earliest_expiry_date,
+                  last_counted_at, last_movement_at, PRIMARY KEY(product_id, location_id))
+safety_stock_rules(product_id FK, location_id FK?, safety_stock NUMERIC(12,3), reorder_point NUMERIC(12,3),
+                  target_level NUMERIC(12,3), auto_order_enabled, auto_approve)
+purchase_orders  (id, po_number CITEXT UNIQUE, supplier_id FK, destination_id FK,
+                  source ENUM(manual,ai_auto), status po_status, order_date, expected_date, received_date,
+                  total_items, total_qty_ordered, total_qty_received, total_cost MASKED, created_by)
+po_lines         (id, po_id FK, product_id FK, qty_ordered NUMERIC(12,3), qty_received NUMERIC(12,3),
+                  unit_cost MASKED, line_total GEN, notes)                     -- totals recompute by trigger
+po_receipts      (id, po_id FK, received_by, received_at, notes)               -- per-delivery receipts
+po_receipt_lines (id, receipt_id FK, po_line_id FK, po_id, product_id, qty_received NUMERIC(12,3)) -- composite FKs
+sales            (id, sale_number CITEXT UNIQUE, store_id FK, sale_datetime, total_items, total_qty,
+                  subtotal, discount, total NUMERIC(14,2), status ENUM(active,voided),
+                  voided_by, voided_at, void_reason, created_by)               -- totals recompute by trigger
+sale_lines       (id, sale_id FK, product_id FK, qty NUMERIC(12,3), unit_price NUMERIC(14,2), line_total GEN)
+sale_returns     (id, sale_id FK, store_id FK, return_datetime, reason, refund_amount, created_by)
+sale_return_lines(id, return_id FK, sale_line_id FK, product_id, qty_returned NUMERIC(12,3),
+                  unit_price, line_refund GEN)                                 -- line must match sale_line product
+stock_movements  (id, product_id FK, location_id FK, type movement_type, qty NUMERIC(12,3),
+                  qty_before, qty_after, sale_id?, sale_line_id?, po_id?, po_line_id?, return_id?,
+                  transfer_ref?, reason, notes, created_by, created_at)         -- IMMUTABLE, via fn_mutate_stock()
+alerts           (id, type alert_type, priority, title, message, product_id?, location_id?, po_id?,
+                  ai_recommendation_id?, target_roles user_role[], is_resolved, resolved_by, expires_at)
+alert_reads      (alert_id FK, user_id FK, read_at, dismissed, PRIMARY KEY(alert_id, user_id))
+alert_preferences(user_id PK, notify_low_stock, notify_out_of_stock, notify_po_*, notify_ai_recommendation,
+                  notify_expiry_warning, email_enabled, email_address)
+ai_recommendations(id, type, status, product_id FK, location_id FK, recommended_value NUMERIC(12,3),
+                   current_value, reasoning, confidence, input_data JSONB, accepted_value,
+                   acted_on_by, acted_on_at, rejection_reason, resulting_po_id, expires_at)
+audit_logs       (id, actor_id FK, actor_email, actor_role, action audit_action, entity, entity_id?,
+                  detail JSONB, ip_address, user_agent, created_at)             -- IMMUTABLE; sensitive values masked
+app_settings     (key PK, value JSONB, description, updated_by, updated_at)
+onboarding_progress(user_id PK, is_completed, current_step, step1..step6, skipped, completed_at)
 ```
 
-### 6.2 Indexes (recommended)
-- `inventory(product_id, location_id)` PK.
-- `sales(store_id, sale_datetime)`, `sales(sale_datetime)` for periodic reports.
-- `stock_movements(product_id, location_id, created_at)`.
-- `po_lines(po_id)`.
-- `alerts(target_role, read, created_at)`.
+**Helper functions/views** (source of truth: `backend/src/db/schema.sql` v1.5): sequences `po_number_seq` / `sale_number_seq`; `generate_po_number()`, `generate_sale_number()`; `compute_stock_status()` (pure); atomic mutators `fn_mutate_stock()` (inventory + movement, `SELECT FOR UPDATE`), `fn_receive_po()` (receipt + qty_received + stock), `fn_transfer_stock()` (two-location via shared `transfer_ref`); views `inventory_status` (COALESCE safety-level fallback, LATERAL rule pick) and `daily_sales_summary` (UTC date).
+
+### 6.2 Indexes (as deployed)
+- `inventory(product_id, location_id)` PK; `idx_inventory_location` for reverse lookups.
+- `sales(store_id, sale_datetime)` (`idx_sales_store_datetime`) + expression index `idx_sales_date_utc` on `(sale_datetime AT TIME ZONE 'UTC')::DATE` for periodic reports.
+- `sale_lines(sale_id)`, `sale_lines(product_id)`.
+- `stock_movements(product_id, location_id, created_at)` + partial indexes on `sale_id`/`po_id`/`transfer_ref`.
+- `po_lines(po_id)`, `po_lines(product_id)`; `purchase_orders(supplier_id)`, `(destination_id)`, `(order_date)`, `(expected_date)`, partial `idx_po_open` (open POs only).
+- `alerts(type)`, partial `(is_resolved) WHERE is_resolved = FALSE`, `(created_at)`, GIN `target_roles`.
+- `profiles(role)`, partial `(store_id)`; `products(name)` GIN trigram (fuzzy search); `categories(parent_id)` + partial unique top-level names.
+- Uniqueness helpers: partial unique `uq_ssr_product_location`/`uq_ssr_product_global` (NULL-safe), `uq_locations_default_warehouse`, `uq_supplier_products_preferred`.
+- `audit_logs(actor_id)`, `(action)`, `(entity, entity_id)`, `(created_at)`; `ai_recommendations(product_id)`, `(type)`, `(status)`, `(created_at)`.
 
 ### 6.3 Data Integrity
-- FK constraints on all references.
-- Check constraints: `qty_on_hand ≥ 0`, `qty > 0` for movements, `sale line qty > 0`.
-- All mutations run in DB transactions.
+- FK constraints on all references; soft deletes only (`status = 'archived'/'inactive'`) — no hard deletes of master data.
+- Check constraints: `qty_on_hand ≥ 0`, movement signs per type, `total = subtotal − discount`, `target ≥ reorder ≥ safety`, `qty_received ≤ qty_ordered`, sale/PO state-transition timestamp rules.
+- **Immutability:** `stock_movements` and `audit_logs` block `UPDATE`/`DELETE` via `trigger_immutable_guard`; sale/PO totals recomputed by triggers on line changes.
+- All stock mutations run through `fn_mutate_stock()` / `fn_receive_po()` / `fn_transfer_stock()` — single transaction, `SELECT FOR UPDATE` row locking prevents races.
+- Sequences guarantee gapless-style `PO-<YYYY>-<seq>` / `SAL-<YYYY>-<seq>` numbering.
 
 ### 6.4 Backup
 - Provider-managed backups where available on free tier + scheduled exports (nightly CSV/DB dump to object storage). Phase-2 targets: RPO ≤ 24h, RTO ≤ 4h.
@@ -392,15 +448,16 @@ audit_logs       (id, actor_id FK, action, entity, entity_id?, detail JSON, crea
 ### 7.1 Masked Fields (agreed at SRS)
 - `products.cost_price`
 - Computed `margin` (displayed where applicable)
-- Supplier commercial/finance fields (e.g., credit terms)
-- Any field flagged sensitive in config
+- Supplier commercial/finance fields: `suppliers.payment_terms`, `suppliers.credit_limit`, `supplier_products.unit_cost`
+- PO economics: `po_lines.unit_cost`, `purchase_orders.total_cost`
+- Any field flagged sensitive in `app_settings['masked_fields']`
 
 ### 7.2 Masking Layers
-1. **Database layer:** sensitive columns stored masked/encrypted (application-level encryption or tokenization; DBAs/read-only users cannot see raw values).
-2. **Application/API layer:**
-   - Authorized roles (ADMIN and explicitly authorized) receive clear-text via a **logged** access path.
+1. **Database layer:** sensitive columns are stored with `╴ MASKED` comments and may be encrypted/tokenized (DBAs/read-only users cannot see raw values). RLS fields are prepared but RBAC+masking is enforced by the backend.
+2. **Application/API layer — single centralized utility** (`backend/src/lib/masking.ts → maskFields(data, role, entity)`), called in **all response serializers**:
+   - Authorized roles (ADMIN and explicitly authorized) receive clear-text **via a logged access path** (audit `sensitive_data_accessed`).
    - Unauthorized roles receive masked representation `"$**.**"` / `"••••"` and masked value in exports too.
-3. **Logs/exceptions:** masked values never logged; error messages never contain raw sensitive values.
+3. **Logs/exceptions:** masked values never logged; error messages and `audit_logs.detail` never contain raw sensitive values.
 
 ### 7.3 Masking Tests
 - Test: forbidden role API call returns masked value; DB read of column returns masked/encrypted; export respects permission; audit log contains no raw values.
@@ -555,7 +612,10 @@ For each (product, warehouse):
 ## 12. Use Cases
 
 ### UC-01 Record a Sale (Primary: SP)
-Precondition: SP logged in. Main: choose store → add items → save → stock decreases → sales totals update → low-stock evaluation. Post: sale immutable; audit logged. Alternate: insuffficient stock → blocked with product detail.
+Precondition: SP logged in. Main: choose store → add items → save → stock decreases (atomic `fn_mutate_stock`) → sales totals update (recompute triggers) → low-stock evaluation. Post: sale immutable, `SAL-<YYYY>-<seq>` number assigned; audit logged. Alternate: insufficient stock → blocked with product detail (`409 INSUFFICIENT_STOCK`).
+
+### UC-01a Void / Return a Sale (A / SP)
+Void: Admin enters reason → sale marked `voided` (excluded from reports), un-returned stock restored, audit `sale_voided`. Return: select original sale lines + qty → stock restored via `sale_return`, refund recomputed, returns cannot exceed sold qty and are blocked on voided sales.
 
 ### UC-02 Stock-In / Receive Goods (SS, A)
 Both ad-hoc stock-in and PO-linked receipt. Post: stock increases; PO status updates.
@@ -573,7 +633,7 @@ Enter counted qty → see variance → confirm → stock updated + audit reason.
 Choose from/to → validate → both rows updated atomically → audit.
 
 ### UC-07 Run Daily/Quarterly/Yearly Report (SP/A/SK)
-Select period & filters → view metrics → export.
+Select period & filters → view metrics (DB-first: daily via `daily_sales_summary` view; quarterly/yearly via aggregates) → export CSV/PDF.
 
 ### UC-08 Manage User & Roles (A)
 Create/edit user with role+store; deactivate; permission enforcement verified.
@@ -643,6 +703,7 @@ Each BRD acceptance criterion (AC-1…AC-14) is verified by one or more **test c
 | TBD-4 | AI auto-qty mode default (target-based vs forecast-based) | Sprint 3 | SA |
 | TBD-5 | Perishable (FR-EXP) inclusion in v1.0 (Could) | Sprint planning | SM/PM |
 | TBD-6 | Alert email provider/limit on free tier | Sprint 3 | Tech Lead (may use Supabase Auth email / provider SMTP) |
+| TBD-7 | AI auto-ordering + warehouse recommendations (Groq) — **planned Sprint 3**; schema + alert plumbing already live (`alerts`, `safety_stock_rules`, `ai_recommendations`, `app_settings` thresholds) | Sprint 3 | SA/Tech Lead |
 
 ---
 
@@ -659,4 +720,4 @@ Each BRD acceptance criterion (AC-1…AC-14) is verified by one or more **test c
 
 ---
 
-*End of SRS — Version 1.0 · Project: Vaultory · Team: Vaultory*
+*End of SRS — Version 1.2 · Project: Vaultory · Team: Vaultory*

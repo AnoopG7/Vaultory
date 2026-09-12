@@ -86,7 +86,7 @@ export default function LoginPage() {
     }
   }
 
-  async function onSubmitSignUp({ confirmPassword: _confirm, ...payload }: SignUpFormInput) {
+  async function onSubmitSignUp(payload: SignUpFormInput) {
     setSubmitting(true)
     try {
       await signUp(payload)

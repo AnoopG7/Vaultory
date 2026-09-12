@@ -1286,7 +1286,7 @@ router.patch(
 
       const current = dbPo.status
       const patch: Record<string, unknown> = {}
-      let statusMessage = ''
+      let statusMessage: string
 
       if (targetStatus === 'cancelled') {
         if (current === 'closed') {
