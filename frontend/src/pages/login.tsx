@@ -21,14 +21,8 @@ import {
   FormMessage,
   Input,
   PasswordInput,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@/components/ui'
 import { signInSchema, signUpSchema, type SignInInput } from '@/lib/schemas'
-import { useStores } from '@/hooks'
 import { useAuthStore } from '@/stores'
 
 type Mode = 'signin' | 'signup'
@@ -61,11 +55,8 @@ export default function LoginPage() {
 
   const signUpForm = useForm<SignUpFormInput>({
     resolver: zodResolver(signUpFormSchema),
-    defaultValues: { email: '', password: '', fullName: '', confirmPassword: '', storeId: '' },
+    defaultValues: { email: '', password: '', fullName: '', confirmPassword: '' },
   })
-
-  const { data: storesData } = useStores()
-  const stores = storesData?.stores ?? []
 
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
@@ -119,7 +110,7 @@ export default function LoginPage() {
           <CardDescription>
             {mode === 'signin'
               ? 'Enter your credentials to access the dashboard.'
-              : 'Self-service store staff accounts. Pick your store — access is limited to it.'}
+              : 'Create a store staff account — an admin will assign your store and role.'}
           </CardDescription>
         </CardHeader>
 
@@ -242,35 +233,8 @@ export default function LoginPage() {
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={signUpForm.control}
-                    name="storeId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Store</FormLabel>
-                        <Select
-                          value={field.value ?? ''}
-                          onValueChange={(v) => field.onChange(v === '' ? undefined : v)}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select your store" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {(stores ?? []).map((s) => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   <p className="text-xs text-muted-foreground">
-                    Your access will be limited to this store.
+                    You&apos;ll be given store access by an admin after your account is approved.
                   </p>
                   <Button type="submit" disabled={authLoading || submitting}>
                     {(authLoading || submitting) && <Loader2 className="animate-spin" />}
