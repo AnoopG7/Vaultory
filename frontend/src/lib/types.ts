@@ -710,28 +710,91 @@ export interface AiRecommendation {
   location_name?: string
 }
 
+export interface RecommendationSummary {
+  total: number
+  pending: number
+  accepted: number
+  modified: number
+  rejected: number
+}
+
 export interface RecommendationListResponse {
   recommendations: AiRecommendation[]
   total: number
   limit: number
   offset: number
+  summary?: RecommendationSummary
 }
 
 export interface Forecast {
   product_id: string
+  product_name?: string
+  sku_code?: string
   predicted_demand: number
   confidence: number | null
   reasoning: string
   sourced_from_ai: boolean
   model_used: string | null
+  insufficient_history?: boolean
+  status?: string
+}
+
+export interface ReorderCandidate {
+  product_id: string
+  product_name: string
+  sku_code: string | null
+  location_id: string
+  location_name: string | null
+  qty_on_hand: number
+  reorder_point: number
+  target_level: number
+  open_po_qty: number
+  forecast_prediction: number | null
+  supplier_id: string
+  recommended_value: number
+  reasoning: string
+  model_used: string
+  confidence: number | null
+  auto_approve: boolean
+}
+
+export interface SkippedDuplicate {
+  product_id: string
+  product_name: string
+  location_id: string
+  location_name: string | null
+  open_po_number: string
+  open_status: string
+  qty_on_hand: number
+  reorder_point: number
+}
+
+export interface UnmappedProduct {
+  product_id: string
+  product_name: string
+  location_id: string
+  location_name: string | null
+  qty_on_hand: number
+  reorder_point: number
 }
 
 export interface AutoOrderTriggerResponse {
-  message: string
+  message?: string
   dry_run: boolean
-  recommendations_created: number
-  po_created: number
-  skipped: number
+  scanned_items_count: number
+  recommendations_created?: number
+  po_created?: number
+  candidates?: ReorderCandidate[]
+  potential_recommendations_count?: number
+  skipped_duplicates?: SkippedDuplicate[]
+  unmapped_products?: UnmappedProduct[]
+  created_recommendations?: ReorderCandidate[]
+}
+
+export interface RecommendationActionResponse {
+  recommendation: AiRecommendation
+  purchase_order?: { id: string; po_number: string; destination_id: string } | null
+  message: string
 }
 
 export interface WarehouseRecommendation {
@@ -745,6 +808,11 @@ export interface WarehouseRecommendation {
   reasoning: string
   confidence: number | null
   model_used: string | null
+}
+
+export interface ForecastTriggerResponse {
+  forecast: Forecast
+  recommendation: AiRecommendation | null
 }
 
 // ── Dashboard ──────────────────────────────────────────────────────────────

@@ -76,6 +76,12 @@ export const queryKeys = {
     yearly: (params?: unknown) => [...queryKeys.reports.all, 'yearly', params] as const,
     storePerformance: (params?: unknown) => [...queryKeys.reports.all, 'storePerformance', params] as const,
   },
+  ai: {
+    all: ['ai'] as const,
+    recommendations: (params?: unknown) => [...queryKeys.ai.all, 'recommendations', params] as const,
+    recommendation: (id: string) => [...queryKeys.ai.all, 'recommendation', id] as const,
+    warehouse: () => [...queryKeys.ai.all, 'warehouse'] as const,
+  },
 }
 
 

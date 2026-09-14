@@ -13,20 +13,39 @@ export const createAiRecommendationSchema = z.object({
   recommendedValue: nonNegativeMoneySchema,
   currentValue: nonNegativeMoneySchema.nullish(),
   reasoning: z.string().trim().min(1),
-  modelUsed: z.string().trim().max(100).optional(),
-  confidence: z.coerce.number().min(0).max(1).optional(),
+  modelUsed: z.string().trim().max(100).nullish(),
+  confidence: z.coerce.number().min(0).max(1).nullish(),
   expiresAt: z.string().datetime().nullish(),
 })
 export type CreateAiRecommendationInput = z.infer<typeof createAiRecommendationSchema>
+
+export const forecastTriggerSchema = z.object({
+  productId: uuidSchema,
+  locationId: uuidSchema.nullish(),
+  horizonDays: z.coerce.number().int().min(1).max(365).default(30),
+})
+export type ForecastTriggerInput = z.infer<typeof forecastTriggerSchema>
+
+export const autoOrderTriggerSchema = z.object({
+  destinationId: uuidSchema.optional(),
+  dryRun: z.boolean().optional().default(false),
+})
+export type AutoOrderTriggerInput = z.infer<typeof autoOrderTriggerSchema>
 
 export const acceptAiRecommendationSchema = z.object({
   acceptedValue: nonNegativeMoneySchema.optional(),
 })
 export type AcceptAiRecommendationInput = z.infer<typeof acceptAiRecommendationSchema>
 
+export const modifyAiRecommendationSchema = z.object({
+  acceptedValue: nonNegativeMoneySchema,
+})
+export type ModifyAiRecommendationInput = z.infer<typeof modifyAiRecommendationSchema>
+
 export const rejectAiRecommendationSchema = z.object({
   rejectionReason: z.string().trim().optional(),
 })
+export type RejectRecommendationInput = z.infer<typeof rejectAiRecommendationSchema>
 
 export const aiRecommendationSchema = z.object({
   id: uuidSchema,

@@ -13,6 +13,7 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   // Groq (LLM forecasting / recommendations). Optional so the server runs without AI.
   GROQ_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  GROQ_MODEL: z.string().min(1).default('openai/gpt-oss-120b'),
 })
 
 const parsed = envSchema.safeParse(process.env)
