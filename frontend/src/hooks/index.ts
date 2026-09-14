@@ -11,5 +11,6 @@ export * from './use-inventory'
 export * from './use-alerts'
 export * from './use-reports'
 export * from './use-products'
+export * from './use-ai'
 
 

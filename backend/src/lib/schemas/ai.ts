@@ -7,6 +7,29 @@ import { aiRecommendationStatusSchema, aiRecommendationTypeSchema } from './enum
  * Encouraged acceptance is recorded via accepted_value / acted_on_by.
  */
 
+// GET /ai/recommendations?type=&status=&productId=&locationId=
+export const listRecommendationsQuerySchema = z.object({
+  type: aiRecommendationTypeSchema.optional(),
+  status: aiRecommendationStatusSchema.optional(),
+  productId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+})
+
+// POST /ai/forecast
+export const forecastTriggerSchema = z.object({
+  productId: uuidSchema,
+  locationId: uuidSchema.nullish(),
+  horizonDays: z.coerce.number().int().min(1).max(365).default(30),
+})
+
+// POST /ai/auto-order
+export const autoOrderTriggerSchema = z.object({
+  destinationId: uuidSchema.optional(),
+  dryRun: z.boolean().optional().default(false),
+})
+
 // POST /ai/recommendations (also issued internally by scheduler)
 export const createAiRecommendationSchema = z.object({
   type: aiRecommendationTypeSchema,
@@ -15,8 +38,8 @@ export const createAiRecommendationSchema = z.object({
   recommendedValue: nonNegativeQtySchema, // NUMERIC(12,3)
   currentValue: nonNegativeQtySchema.nullish(),
   reasoning: textSchema.min(1),
-  modelUsed: z.string().trim().max(100).optional(),
-  confidence: z.coerce.number().min(0).max(1).optional(),
+  modelUsed: z.string().trim().max(100).nullish(),
+  confidence: z.coerce.number().min(0).max(1).nullish(),
   inputData: z.unknown().optional(),
   expiresAt: z.string().datetime().nullish(),
 })
@@ -27,6 +50,12 @@ export const acceptAiRecommendationSchema = z.object({
   acceptedValue: nonNegativeQtySchema.optional(),
 })
 export type AcceptAiRecommendationInput = z.infer<typeof acceptAiRecommendationSchema>
+
+// POST /ai/recommendations/:id/modify — a value edit, then accept.
+export const modifyAiRecommendationSchema = z.object({
+  acceptedValue: nonNegativeQtySchema,
+})
+export type ModifyAiRecommendationInput = z.infer<typeof modifyAiRecommendationSchema>
 
 export const rejectAiRecommendationSchema = z.object({
   rejectionReason: textSchema.optional(),

@@ -14,6 +14,7 @@ import { auditRoutes } from '../modules/audit/index.js'
 import { reportsRoutes } from '../modules/reports/index.js'
 import { categoriesRoutes } from '../modules/categories/index.js'
 import { unitsRoutes } from '../modules/units/index.js'
+import { aiRoutes } from '../modules/ai/index.js'
 
 /**
  * Central API router (mounted at /api in app.ts).
@@ -48,6 +49,7 @@ api.use('/', reportsRoutes)
 api.use('/', productsRoutes)
 api.use('/', categoriesRoutes)
 api.use('/', unitsRoutes)
+api.use('/', aiRoutes)
 
 export default api
 
