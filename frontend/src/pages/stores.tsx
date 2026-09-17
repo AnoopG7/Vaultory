@@ -68,17 +68,13 @@ export default function StoresPage() {
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.role === 'admin'
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'stores' | 'locations'>('stores')
+  // Active Tab: 'all' | 'stores' | 'warehouses'
+  const [activeTab, setActiveTab] = useState<'all' | 'stores' | 'warehouses'>('all')
 
-  // Stores Filter State
+  // Search Filter States
+  const [allSearch, setAllSearch] = useState('')
   const [storeSearch, setStoreSearch] = useState('')
-  const [storeStatus, setStoreStatus] = useState<'all' | 'active' | 'archived'>('all')
-
-  // Locations Filter State
-  const [locationSearch, setLocationSearch] = useState('')
-  const [locationType, setLocationType] = useState<'all' | 'store' | 'warehouse'>('all')
-  const [locationStatus, setLocationStatus] = useState<'all' | 'active' | 'archived'>('all')
+  const [warehouseSearch, setWarehouseSearch] = useState('')
 
   // Modals state
   const [isAddStoreOpen, setIsAddStoreOpen] = useState(false)
@@ -86,17 +82,9 @@ export default function StoresPage() {
   const [viewingStoreId, setViewingStoreId] = useState<string | null>(null)
   const [editingLocation, setEditingLocation] = useState<Location | null>(null)
 
-  // API Queries & Mutations
-  const { data: storesData, isLoading: isLoadingStores } = useStoresList({
-    search: storeSearch,
-    status: storeStatus,
-  })
-
-  const { data: locationsData, isLoading: isLoadingLocations } = useLocationsList({
-    search: locationSearch,
-    type: locationType,
-    status: locationStatus,
-  })
+  // API Queries & Mutations (fetch full collections; client-side instant search for smooth tab counts)
+  const { data: storesData, isLoading: isLoadingStores } = useStoresList()
+  const { data: locationsData, isLoading: isLoadingLocations } = useLocationsList()
 
   const { data: storeDetailData, isLoading: isLoadingDetail } = useStoreDetail(viewingStoreId ?? undefined)
 
@@ -105,14 +93,55 @@ export default function StoresPage() {
   const updateLocationMutation = useUpdateLocation()
 
   const stores = useMemo(() => storesData?.stores ?? [], [storesData])
-  const locations = useMemo(() => locationsData?.locations ?? [], [locationsData])
+  const allLocations = useMemo(() => locationsData?.locations ?? [], [locationsData])
+  const warehouses = useMemo(() => allLocations.filter((l) => l.type === 'warehouse'), [allLocations])
+
+  // Filtered stores by storeSearch
+  const filteredStores = useMemo(() => {
+    if (!storeSearch.trim()) return stores
+    const q = storeSearch.toLowerCase().trim()
+    return stores.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.code.toLowerCase().includes(q) ||
+        (s.city && s.city.toLowerCase().includes(q)) ||
+        (s.address && s.address.toLowerCase().includes(q)),
+    )
+  }, [stores, storeSearch])
+
+  // Filtered all locations by allSearch
+  const filteredAllLocations = useMemo(() => {
+    if (!allSearch.trim()) return allLocations
+    const q = allSearch.toLowerCase().trim()
+    return allLocations.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.code.toLowerCase().includes(q) ||
+        (l.city && l.city.toLowerCase().includes(q)) ||
+        (l.address && l.address.toLowerCase().includes(q)) ||
+        (l.store_name && l.store_name.toLowerCase().includes(q)),
+    )
+  }, [allLocations, allSearch])
+
+  // Filtered warehouses by warehouseSearch
+  const filteredWarehouses = useMemo(() => {
+    if (!warehouseSearch.trim()) return warehouses
+    const q = warehouseSearch.toLowerCase().trim()
+    return warehouses.filter(
+      (w) =>
+        w.name.toLowerCase().includes(q) ||
+        w.code.toLowerCase().includes(q) ||
+        (w.city && w.city.toLowerCase().includes(q)) ||
+        (w.address && w.address.toLowerCase().includes(q)),
+    )
+  }, [warehouses, warehouseSearch])
 
   // KPI Calculations
   const metrics = useMemo(() => {
     const totalStores = stores.length
     const activeStores = stores.filter((s) => s.status === 'active').length
-    const totalWarehouses = locations.filter((l) => l.type === 'warehouse').length
-    const defaultWarehouse = locations.find((l) => l.type === 'warehouse' && l.is_default)
+    const totalWarehouses = warehouses.length
+    const defaultWarehouse = warehouses.find((l) => l.is_default)
     const totalStaff = stores.reduce((acc, s) => acc + (s.staff_count ?? 0), 0)
     const totalUnits = stores.reduce((acc, s) => acc + (s.total_inventory_units ?? 0), 0)
 
@@ -124,7 +153,7 @@ export default function StoresPage() {
       totalStaff,
       totalUnits,
     }
-  }, [stores, locations])
+  }, [stores, warehouses])
 
   // New Store Form State
   const [newStoreForm, setNewStoreForm] = useState({
@@ -357,21 +386,185 @@ export default function StoresPage() {
       {/* Main Tabs Navigation */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'stores' | 'locations')}
+        onValueChange={(v) => setActiveTab(v as 'all' | 'stores' | 'warehouses')}
         className="w-full"
       >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-3">
           <TabsList className="bg-muted">
+            <TabsTrigger value="all" className="flex items-center gap-2">
+              <Building2 className="size-4" />
+              All ({allLocations.length})
+            </TabsTrigger>
             <TabsTrigger value="stores" className="flex items-center gap-2">
               <StoreIcon className="size-4" />
               Retail Stores ({stores.length})
             </TabsTrigger>
-            <TabsTrigger value="locations" className="flex items-center gap-2">
-              <Building2 className="size-4" />
-              Physical Locations & Warehouses ({locations.length})
+            <TabsTrigger value="warehouses" className="flex items-center gap-2">
+              <Warehouse className="size-4" />
+              Warehouse ({warehouses.length})
             </TabsTrigger>
           </TabsList>
         </div>
+
+        {/* ========================================================================= */}
+        {/* TAB 1: ALL LOCATIONS & WAREHOUSES */}
+        {/* ========================================================================= */}
+        <TabsContent value="all" className="mt-4 flex flex-col gap-4">
+          {/* Filters - Search Only (No Dropdowns) */}
+          <Card className="shadow-xs">
+            <CardContent className="p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search all locations by name, code, city, address..."
+                    value={allSearch}
+                    onChange={(e) => setAllSearch(e.target.value)}
+                    className="pl-9 pr-8"
+                  />
+                  {allSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setAllSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* All Locations Table */}
+          <Card className="shadow-xs overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[130px]">Code</TableHead>
+                  <TableHead className="w-[120px]">Type</TableHead>
+                  <TableHead>Location Name & Address</TableHead>
+                  <TableHead>Linked Store Master</TableHead>
+                  <TableHead className="text-center">Role / Default</TableHead>
+                  <TableHead className="text-center w-[100px]">Status</TableHead>
+                  <TableHead className="text-right w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingLocations ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="size-6 animate-spin text-primary" />
+                        <p className="text-sm">Loading all locations...</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredAllLocations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Building2 className="size-8 text-muted-foreground/50" />
+                        <p className="text-sm font-medium">No locations found</p>
+                        <p className="text-xs">Adjust your search criteria.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredAllLocations.map((loc) => (
+                    <TableRow key={loc.id} className="hover:bg-muted/40 transition-colors">
+                      {/* Code */}
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono text-xs font-semibold bg-muted/50">
+                          {loc.code}
+                        </Badge>
+                      </TableCell>
+
+                      {/* Type */}
+                      <TableCell>
+                        {loc.type === 'warehouse' ? (
+                          <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 gap-1 font-normal">
+                            <Warehouse className="size-3" />
+                            Warehouse
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 gap-1 font-normal">
+                            <StoreIcon className="size-3" />
+                            Store
+                          </Badge>
+                        )}
+                      </TableCell>
+
+                      {/* Name & Address */}
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{loc.name}</span>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                            <MapPin className="size-3 shrink-0" />
+                            <span>{loc.address || loc.city || 'No address set'}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Linked Store */}
+                      <TableCell>
+                        {loc.store_name ? (
+                          <div className="flex items-center gap-1.5 text-sm text-foreground">
+                            <StoreIcon className="size-3.5 text-muted-foreground" />
+                            <span>{loc.store_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">— (Central Hub)</span>
+                        )}
+                      </TableCell>
+
+                      {/* Role / Default */}
+                      <TableCell className="text-center">
+                        {loc.is_default ? (
+                          <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1 text-xs">
+                            <Star className="size-3 fill-amber-500" />
+                            Default PO Target
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell className="text-center">
+                        {loc.status === 'active' ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-muted-foreground">
+                            Inactive
+                          </Badge>
+                        )}
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell className="text-right">
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEditLocation(loc)}
+                            title="Edit Physical Location"
+                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                          >
+                            <Edit2 className="size-4" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
 
         {/* ========================================================================= */}
         {/* TAB 1: RETAIL STORES */}
@@ -398,23 +591,6 @@ export default function StoresPage() {
                       <X className="size-4" />
                     </button>
                   )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Filter Status:</Label>
-                  <Select
-                    value={storeStatus}
-                    onValueChange={(val) => setStoreStatus(val as typeof storeStatus)}
-                  >
-                    <SelectTrigger className="w-[130px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Stores</SelectItem>
-                      <SelectItem value="active">Active Only</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
             </CardContent>
@@ -444,7 +620,7 @@ export default function StoresPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : stores.length === 0 ? (
+                ) : filteredStores.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
@@ -455,7 +631,7 @@ export default function StoresPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  stores.map((store) => (
+                  filteredStores.map((store) => (
                     <TableRow key={store.id} className="hover:bg-muted/40 transition-colors">
                       {/* Code */}
                       <TableCell>
@@ -596,80 +772,43 @@ export default function StoresPage() {
         </TabsContent>
 
         {/* ========================================================================= */}
-        {/* TAB 2: PHYSICAL LOCATIONS & WAREHOUSES */}
+        {/* TAB 3: WAREHOUSE */}
         {/* ========================================================================= */}
-        <TabsContent value="locations" className="mt-4 flex flex-col gap-4">
-          {/* Filters */}
+        <TabsContent value="warehouses" className="mt-4 flex flex-col gap-4">
+          {/* Filters - Search Only (No Dropdowns) */}
           <Card className="shadow-xs">
             <CardContent className="p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search locations by name, code, city, address..."
-                    value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
+                    placeholder="Search warehouses by name, code, city, address..."
+                    value={warehouseSearch}
+                    onChange={(e) => setWarehouseSearch(e.target.value)}
                     className="pl-9 pr-8"
                   />
-                  {locationSearch && (
+                  {warehouseSearch && (
                     <button
                       type="button"
-                      onClick={() => setLocationSearch('')}
+                      onClick={() => setWarehouseSearch('')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       <X className="size-4" />
                     </button>
                   )}
                 </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">Type:</Label>
-                    <Select
-                      value={locationType}
-                      onValueChange={(val) => setLocationType(val as typeof locationType)}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="store">Store Location</SelectItem>
-                        <SelectItem value="warehouse">Warehouse</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">Status:</Label>
-                    <Select
-                      value={locationStatus}
-                      onValueChange={(val) => setLocationStatus(val as typeof locationStatus)}
-                    >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Locations Table */}
+          {/* Warehouses Table */}
           <Card className="shadow-xs overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[130px]">Code</TableHead>
-                  <TableHead className="w-[120px]">Type</TableHead>
-                  <TableHead>Location Name & Address</TableHead>
-                  <TableHead>Linked Store Master</TableHead>
+                  <TableHead>Warehouse Name & Address</TableHead>
+                  <TableHead>Contact Info</TableHead>
                   <TableHead className="text-center">Role / Default</TableHead>
                   <TableHead className="text-center w-[100px]">Status</TableHead>
                   <TableHead className="text-right w-[100px]">Actions</TableHead>
@@ -678,74 +817,66 @@ export default function StoresPage() {
               <TableBody>
                 {isLoadingLocations ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Loader2 className="size-6 animate-spin text-primary" />
-                        <p className="text-sm">Loading physical locations...</p>
+                        <p className="text-sm">Loading warehouses...</p>
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : locations.length === 0 ? (
+                ) : filteredWarehouses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <Building2 className="size-8 text-muted-foreground/50" />
-                        <p className="text-sm font-medium">No locations found</p>
-                        <p className="text-xs">Adjust your search or filter options.</p>
+                        <Warehouse className="size-8 text-muted-foreground/50" />
+                        <p className="text-sm font-medium">No warehouses found</p>
+                        <p className="text-xs">Adjust your search criteria.</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  locations.map((loc) => (
-                    <TableRow key={loc.id} className="hover:bg-muted/40 transition-colors">
+                  filteredWarehouses.map((wh) => (
+                    <TableRow key={wh.id} className="hover:bg-muted/40 transition-colors">
                       {/* Code */}
                       <TableCell>
                         <Badge variant="outline" className="font-mono text-xs font-semibold bg-muted/50">
-                          {loc.code}
+                          {wh.code}
                         </Badge>
-                      </TableCell>
-
-                      {/* Type */}
-                      <TableCell>
-                        {loc.type === 'warehouse' ? (
-                          <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30 gap-1 font-normal">
-                            <Warehouse className="size-3" />
-                            Warehouse
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 gap-1 font-normal">
-                            <StoreIcon className="size-3" />
-                            Store
-                          </Badge>
-                        )}
                       </TableCell>
 
                       {/* Name & Address */}
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{loc.name}</span>
+                          <span className="font-medium text-foreground">{wh.name}</span>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
                             <MapPin className="size-3 shrink-0" />
-                            <span>{loc.address || loc.city || 'No address set'}</span>
+                            <span>{wh.address || wh.city || 'No address set'}</span>
                           </div>
                         </div>
                       </TableCell>
 
-                      {/* Linked Store */}
+                      {/* Contact Info */}
                       <TableCell>
-                        {loc.store_name ? (
-                          <div className="flex items-center gap-1.5 text-sm text-foreground">
-                            <StoreIcon className="size-3.5 text-muted-foreground" />
-                            <span>{loc.store_name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">— (Central Hub)</span>
-                        )}
+                        <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                          {wh.phone && (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="size-3 shrink-0 text-muted-foreground" />
+                              <span>{wh.phone}</span>
+                            </div>
+                          )}
+                          {wh.email && (
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="size-3 shrink-0 text-muted-foreground" />
+                              <span>{wh.email}</span>
+                            </div>
+                          )}
+                          {!wh.phone && !wh.email && <span>—</span>}
+                        </div>
                       </TableCell>
 
                       {/* Role / Default */}
                       <TableCell className="text-center">
-                        {loc.is_default ? (
+                        {wh.is_default ? (
                           <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1 text-xs">
                             <Star className="size-3 fill-amber-500" />
                             Default PO Target
@@ -757,7 +888,7 @@ export default function StoresPage() {
 
                       {/* Status */}
                       <TableCell className="text-center">
-                        {loc.status === 'active' ? (
+                        {wh.status === 'active' ? (
                           <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
                             Active
                           </Badge>
@@ -774,7 +905,7 @@ export default function StoresPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenEditLocation(loc)}
+                            onClick={() => handleOpenEditLocation(wh)}
                             title="Edit Physical Location"
                             className="h-8 px-2 text-muted-foreground hover:text-foreground"
                           >
