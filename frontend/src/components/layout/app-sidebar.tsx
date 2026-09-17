@@ -46,16 +46,31 @@ const navGroups: NavGroup[] = [
   {
     group: 'Operations',
     items: [
-      { to: '/', label: 'Dashboard', icon: BarChart3, end: true },
-      { to: '/inventory', label: 'Inventory', icon: Boxes },
+      { to: '/dashboard', label: 'Dashboard', icon: BarChart3, end: true },
+      {
+        to: '/inventory',
+        label: 'Inventory',
+        icon: Boxes,
+        roles: ['admin', 'store_staff', 'senior_stakeholder'],
+      },
       { to: '/sales', label: 'Sales & Orders', icon: ShoppingCart },
     ],
   },
   {
     group: 'Automation',
     items: [
-      { to: '/auto-order', label: 'Auto-Ordering', icon: Sparkles },
-      { to: '/purchase-orders', label: 'Purchase Orders', icon: PackageCheck },
+      {
+        to: '/auto-order',
+        label: 'Auto-Ordering',
+        icon: Sparkles,
+        roles: ['admin', 'store_staff'],
+      },
+      {
+        to: '/purchase-orders',
+        label: 'Purchase Orders',
+        icon: PackageCheck,
+        roles: ['admin', 'store_staff'],
+      },
     ],
   },
   {
