@@ -58,10 +58,10 @@ export default function LoginPage() {
     defaultValues: { email: '', password: '', fullName: '', confirmPassword: '' },
   })
 
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
+  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   async function onSubmitSignIn(values: SignInInput) {
@@ -94,15 +94,15 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted/40 p-4">
-      <div className="flex flex-col items-center gap-2">
-        <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+      <Link to="/" className="flex flex-col items-center gap-2 group cursor-pointer hover:opacity-90 transition-opacity">
+        <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md">
           <Sparkles className="size-6" />
         </div>
         <div className="text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Vaultory</h1>
           <p className="text-sm text-muted-foreground">Retail inventory intelligence</p>
         </div>
-      </div>
+      </Link>
 
       <Card className="w-full max-w-sm">
         <CardHeader>
