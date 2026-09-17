@@ -115,6 +115,8 @@ export const auditActionSchema = z.enum([
   'alert_created', 'alert_read', 'alert_dismissed',
   'category_created', 'category_updated', 'category_archived',
   'unit_created', 'unit_updated',
+  'store_created', 'store_updated',
+  'location_created', 'location_updated',
   'bulk_import', 'bulk_export',
   'setting_updated',
   'sensitive_data_accessed',

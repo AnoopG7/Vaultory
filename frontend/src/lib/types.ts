@@ -142,20 +142,40 @@ export interface Store {
   code: string
   city: string | null
   state: string | null
+  address?: string | null
+  phone?: string | null
+  email?: string | null
   status: EntityStatus
   created_at: string
+  updated_at?: string
+  location_id?: string | null
+  staff_count?: number
+  inventory_item_count?: number
+  total_inventory_units?: number
+  total_inventory_value?: number
 }
 
 export interface StoreListResponse {
   stores: Store[]
 }
 
+export interface StoreStaffMember {
+  id: string
+  full_name: string
+  email: string
+  role: UserRole
+  phone: string | null
+  status: string
+}
+
 export interface StoreDetailResponse {
-  store: Store & {
-    address: string | null
-    phone: string | null
-    email: string | null
-    updated_at: string
+  store: Store
+  location?: Location | null
+  staff?: StoreStaffMember[]
+  inventory?: {
+    item_count: number
+    total_units: number
+    total_value: number
   }
 }
 
