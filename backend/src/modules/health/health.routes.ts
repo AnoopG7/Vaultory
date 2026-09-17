@@ -18,13 +18,10 @@ router.get(
     let db = 'ok'
     let dbError: string | null = null
     try {
-      const { error } = await supabase.from('health_check').select('id').limit(1)
+      const { error } = await supabase.from('stores').select('id').limit(1)
       if (error) {
-        // Table may not exist yet - still counts as "reachable" if the query runs.
-        if (error.code !== '42P01') {
-          db = 'error'
-          dbError = error.message
-        }
+        db = 'error'
+        dbError = error.message
       }
     } catch (e) {
       db = 'error'
