@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { emailSchema, shortCodeSchema, uuidSchema } from './common.js'
+import { emailSchema, idParamSchema, shortCodeSchema, uuidSchema } from './common.js'
 import { entityStatusSchema } from './enums.js'
 
 /**
@@ -27,3 +27,11 @@ export const storeSchema = createStoreSchema.extend({
   updated_at: z.string(),
 })
 export type Store = z.infer<typeof storeSchema>
+
+export const storeIdParamSchema = idParamSchema
+
+export const listStoresQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  status: z.enum(['all', 'active', 'inactive']).default('all'),
+})
+export type ListStoresQuery = z.infer<typeof listStoresQuerySchema>

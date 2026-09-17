@@ -4,6 +4,7 @@ import { healthRoutes } from '../modules/health/index.js'
 import { salesRoutes } from '../modules/sales/index.js'
 import { dashboardRoutes } from '../modules/dashboard/index.js'
 import { productsRoutes } from '../modules/products/index.js'
+import { storesRoutes } from '../modules/stores/index.js'
 import { referenceRoutes } from '../modules/reference/index.js'
 import { suppliersRoutes } from '../modules/suppliers/index.js'
 import { purchaseOrdersRoutes } from '../modules/purchase-orders/index.js'
@@ -38,6 +39,10 @@ api.use('/', dashboardRoutes)
 // before referenceRoutes so the legacy dropdown route is superseded; its
 // shape stays compatible (id, sku_code, name, sale_price, status).
 api.use('/', productsRoutes)
+// Stores module owns GET /api/stores and /api/locations (list + CRUD, FR-INV-02).
+// Mounted before referenceRoutes so rich listings and management supersede
+// the basic reference dropdowns while maintaining public signup compatibility.
+api.use('/', storesRoutes)
 api.use('/', referenceRoutes)
 api.use('/', suppliersRoutes)
 api.use('/', purchaseOrdersRoutes)
