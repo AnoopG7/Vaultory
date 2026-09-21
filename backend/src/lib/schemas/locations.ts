@@ -38,3 +38,10 @@ export const locationSchema = createLocationSchema.extend({
 export type Location = z.infer<typeof locationSchema>
 
 export const locationIdParamSchema = idParamSchema
+
+export const listLocationsQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  type: z.enum(['all', 'store', 'warehouse']).default('all'),
+  status: z.enum(['all', 'active', 'inactive']).default('all'),
+})
+export type ListLocationsQuery = z.infer<typeof listLocationsQuerySchema>
