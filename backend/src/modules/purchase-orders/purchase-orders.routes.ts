@@ -1479,6 +1479,7 @@ router.post(
         if (!matchingLine) {
           throw new AppError(400, `PO line item not found for product ${productId}`, 'PO_LINE_MISMATCH')
         }
+        const resolvedProductId = productId ?? matchingLine.product_id
 
         const remaining = Number(matchingLine.qty_ordered) - Number(matchingLine.qty_received)
         if (qtyReceived > remaining + 1e-9) {
@@ -1489,7 +1490,7 @@ router.post(
           )
         }
 
-        const prod = prodInfo.get(productId)
+        const prod = prodInfo.get(resolvedProductId)
         if (prod?.is_perishable && !earliestExpiry) {
           throw new AppError(
             400,
@@ -1501,7 +1502,7 @@ router.post(
         const { error: rpcErr } = await supabase.rpc('fn_receive_po', {
           p_po_id: id,
           p_po_line_id: matchingLine.id,
-          p_product_id: productId,
+          p_product_id: resolvedProductId,
           p_location_id: dbPo.destination_id,
           p_qty_received: qtyReceived,
           p_received_by: receivedBy ?? req.userId ?? null,
