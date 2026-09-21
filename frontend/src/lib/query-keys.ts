@@ -80,6 +80,7 @@ export const queryKeys = {
     quarterly: (params?: unknown) => [...queryKeys.reports.all, 'quarterly', params] as const,
     yearly: (params?: unknown) => [...queryKeys.reports.all, 'yearly', params] as const,
     storePerformance: (params?: unknown) => [...queryKeys.reports.all, 'storePerformance', params] as const,
+    movers: (params?: unknown) => [...queryKeys.reports.all, 'movers', params] as const,
   },
   ai: {
     all: ['ai'] as const,

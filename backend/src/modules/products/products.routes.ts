@@ -8,9 +8,11 @@ import {
   updateProductSchema,
   listProductsQuerySchema,
   productIdParamSchema,
+  moverQuerySchema,
   type CreateProductInput,
   type UpdateProductInput,
   type ListProductsQuery,
+  type MoverQuery,
 } from '../../lib/schemas/index.js'
 import { memoryCategories, findDescendantCategoryIds } from '../categories/index.js'
 import { memoryUnits } from '../units/index.js'
@@ -19,6 +21,7 @@ import {
   syncProductToMockStores,
   registerProductInMockStores,
   validateStockLevels,
+  getMovers,
   type LocalProduct,
 } from './products.store.js'
 
@@ -298,7 +301,41 @@ router.post(
 )
 
 // -----------------------------------------------------------------------------
-// 3. GET /api/products/:id — product detail (masked cost for non-admin)
+// 3. GET /api/products/movers — fast/slow mover classification report
+// -----------------------------------------------------------------------------
+router.get(
+  '/products/movers',
+  requireAuth,
+  validate(moverQuerySchema, 'query'),
+  asyncHandler(async (req, res) => {
+    const query = validated(req, 'query', moverQuerySchema) as MoverQuery
+
+    // Store staff can only view movers for their own store (SRS §7).
+    const requestedStore = query.storeId || query.store_id
+    const effectiveStore =
+      req.role === 'store_staff' && req.storeId
+        ? (() => {
+            if (requestedStore && requestedStore !== req.storeId) {
+              throw new AppError(403, 'You can only view movers for your own store', 'FORBIDDEN')
+            }
+            return req.storeId
+          })()
+        : requestedStore
+
+    const report = await getMovers({
+      windowDays: query.windowDays,
+      storeId: effectiveStore,
+      categoryId: query.categoryId || query.category_id,
+      classification: query.classification,
+      limit: query.limit,
+    })
+
+    res.json(report)
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// 4. GET /api/products/:id — product detail (masked cost for non-admin)
 // -----------------------------------------------------------------------------
 router.get(
   '/products/:id',
@@ -337,7 +374,7 @@ router.get(
 )
 
 // -----------------------------------------------------------------------------
-// 4. PATCH /api/products/:id — update product (Admin only)
+// 5. PATCH /api/products/:id — update product (Admin only)
 // -----------------------------------------------------------------------------
 router.patch(
   '/products/:id',
@@ -455,7 +492,7 @@ router.patch(
 )
 
 // -----------------------------------------------------------------------------
-// 5. PATCH /api/products/:id/archive — soft archive (Admin only)
+// 6. PATCH /api/products/:id/archive — soft archive (Admin only)
 // -----------------------------------------------------------------------------
 router.patch(
   '/products/:id/archive',

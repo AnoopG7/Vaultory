@@ -10,6 +10,7 @@ import {
   Component as ComponentIcon,
   Truck,
   Users,
+  ScrollText,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import {
@@ -66,6 +67,7 @@ const navGroups: NavGroup[] = [
       { to: '/suppliers', label: 'Suppliers', icon: Truck, roles: ['admin'] },
       { to: '/stores', label: 'Stores', icon: StoreIcon, roles: ['admin', 'senior_stakeholder'] },
       { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'senior_stakeholder'] },
+      { to: '/audit', label: 'Audit Logs', icon: ScrollText, roles: ['admin', 'sales_personnel'] },
       { to: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
     ],
   },

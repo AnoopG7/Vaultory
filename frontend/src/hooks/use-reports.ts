@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import type {
   DailyReportResponse,
+  MoverResponse,
   QuarterlyReportResponse,
   StorePerformanceResponse,
   YearlyReportResponse,
@@ -81,5 +82,26 @@ export function useStorePerformanceReport(params: StorePerformanceParams = {}) {
   return useQuery({
     queryKey: queryKeys.reports.storePerformance(params),
     queryFn: () => api.get<StorePerformanceResponse>(`/reports/store-performance${qs ? `?${qs}` : ''}`),
+  })
+}
+
+export interface MoverParams {
+  windowDays?: number
+  storeId?: string
+  categoryId?: string
+  classification?: 'fast' | 'slow' | 'normal'
+}
+
+export function useMovers(params: MoverParams = {}) {
+  const search = new URLSearchParams()
+  if (params.windowDays) search.set('windowDays', String(params.windowDays))
+  if (params.storeId) search.set('storeId', params.storeId)
+  if (params.categoryId) search.set('categoryId', params.categoryId)
+  if (params.classification) search.set('classification', params.classification)
+  const qs = search.toString()
+
+  return useQuery({
+    queryKey: queryKeys.reports.movers(params),
+    queryFn: () => api.get<MoverResponse>(`/products/movers${qs ? `?${qs}` : ''}`),
   })
 }

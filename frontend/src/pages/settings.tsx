@@ -299,6 +299,12 @@ export default function SettingsPage() {
             <div className="rounded-md bg-muted p-2.5 text-xs text-muted-foreground">
               RBAC enforced server-side on all endpoints. Deactivated accounts lose access immediately.
             </div>
+            <Button asChild variant="outline" className="w-full justify-between" size="sm">
+              <Link to="/audit">
+                <span>View Audit Logs</span>
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
           </CardContent>
         </Card>
 

@@ -11,6 +11,8 @@ import {
   IndianRupee,
   Award,
   Filter,
+  Zap,
+  PackageX,
 } from 'lucide-react'
 import {
   BarChart,
@@ -48,6 +50,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  Badge,
 } from '@/components/ui'
 import { useAuthStore } from '@/stores'
 import {
@@ -56,7 +59,10 @@ import {
   useYearlySalesReport,
   useStorePerformanceReport,
   useStores,
+  useMovers,
+  useCategories,
 } from '@/hooks'
+import type { MoverItem } from '@/lib/types'
 import { downloadCsv, triggerPrint } from '@/lib/export'
 
 const currency = (n: number) =>
@@ -107,6 +113,14 @@ export default function ReportsPage() {
   const [perfFrom, setPerfFrom] = useState<string>('')
   const [perfTo, setPerfTo] = useState<string>('')
 
+  // Filters: Fast/Slow Movers
+  const [moverWindow, setMoverWindow] = useState<string>('90')
+  const [moverStore, setMoverStore] = useState<string>(
+    isStoreScoped && userStoreId ? userStoreId : 'all',
+  )
+  const [moverClassification, setMoverClassification] = useState<string>('all')
+  const [moverCategory, setMoverCategory] = useState<string>('all')
+
   // Report Queries
   const effectiveDailyStore =
     isStoreScoped && userStoreId
@@ -145,6 +159,35 @@ export default function ReportsPage() {
     from: perfFrom || undefined,
     to: perfTo || undefined,
   })
+
+  // Movers query
+  const categoriesData = useCategories({ status: 'active' })
+  const categoryList = categoriesData?.data?.categories ?? []
+  const effectiveMoverStore =
+    isStoreScoped && userStoreId
+      ? userStoreId
+      : moverStore === 'all'
+        ? undefined
+        : moverStore
+  const moversQuery = useMovers({
+    windowDays: moverWindow ? Number(moverWindow) : undefined,
+    storeId: effectiveMoverStore,
+    categoryId: moverCategory === 'all' ? undefined : moverCategory,
+    classification:
+      moverClassification === 'all'
+        ? undefined
+        : (moverClassification as MoverItem['classification']),
+  })
+  const moverItems = moversQuery.data?.items ?? []
+  const moverFastCount = moverItems.filter((i) => i.classification === 'fast').length
+  const moverSlowCount = moverItems.filter((i) => i.classification === 'slow').length
+  const moverNormalCount = moverItems.filter((i) => i.classification === 'normal').length
+
+  const classificationBadge = (c: MoverItem['classification']) => {
+    if (c === 'fast') return <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">Fast Mover</Badge>
+    if (c === 'slow') return <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-300">Slow Mover</Badge>
+    return <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300">Normal</Badge>
+  }
 
   // Export handlers
   const handleExportCsv = () => {
@@ -244,6 +287,32 @@ export default function ReportsPage() {
         `Comparison: Average Store Revenue,${report.comparison?.average_store_revenue ?? 0}`,
       ]
       downloadCsv('store-performance-report', headers, rows, summaryLines)
+    } else if (activeTab === 'movers') {
+      const report = moversQuery.data
+      if (!report) return
+      const headers = [
+        'SKU',
+        'Product Name',
+        'Product ID',
+        'Units Sold',
+        'Sales Value (INR)',
+        'Classification',
+      ]
+      const rows = (report.items ?? []).map((item) => [
+        item.sku_code,
+        item.product_name,
+        item.product_id,
+        item.total_units_sold,
+        item.sales_value.toFixed(2),
+        item.classification,
+      ])
+      const summaryLines = [
+        `Analysis Window (Days),${report.window_days}`,
+        `Summary: Fast Movers,${moverFastCount}`,
+        `Summary: Normal Movers,${moverNormalCount}`,
+        `Summary: Slow Movers,${moverSlowCount}`,
+      ]
+      downloadCsv(`movers-report-${report.window_days}days`, headers, rows, summaryLines)
     }
   }
 
@@ -323,7 +392,7 @@ export default function ReportsPage() {
         onValueChange={setActiveTab}
         className="w-full space-y-6"
       >
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 print:hidden">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 print:hidden">
           <TabsTrigger value="daily" className="gap-2">
             <Calendar className="h-4 w-4" />
             <span>Daily Sales</span>
@@ -339,6 +408,10 @@ export default function ReportsPage() {
           <TabsTrigger value="store-performance" className="gap-2">
             <StoreIcon className="h-4 w-4" />
             <span>Store Performance</span>
+          </TabsTrigger>
+          <TabsTrigger value="movers" className="gap-2">
+            <Zap className="h-4 w-4" />
+            <span>Fast/Slow Movers</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1144,6 +1217,228 @@ export default function ReportsPage() {
                         </TableCell>
                         <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
                           {currency(store.total_sales_value)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* 5. FAST / SLOW MOVERS TAB */}
+        {/* ------------------------------------------------------------------ */}
+        <TabsContent value="movers" className="space-y-6">
+          {/* Filters Bar */}
+          <Card className="print:hidden">
+            <CardContent className="pt-6">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Filters:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Window:</span>
+                  <Select value={moverWindow} onValueChange={setMoverWindow}>
+                    <SelectTrigger className="h-9 w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">Last 30 days</SelectItem>
+                      <SelectItem value="60">Last 60 days</SelectItem>
+                      <SelectItem value="90">Last 90 days</SelectItem>
+                      <SelectItem value="180">Last 180 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Classifier:</span>
+                  <Select value={moverClassification} onValueChange={setMoverClassification}>
+                    <SelectTrigger className="h-9 w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Classifications</SelectItem>
+                      <SelectItem value="fast">Fast Movers</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="slow">Slow Movers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Category:</span>
+                  <Select value={moverCategory} onValueChange={setMoverCategory}>
+                    <SelectTrigger className="h-9 w-52">
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categoryList.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {!isStoreScoped && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Store:</span>
+                    <Select value={moverStore} onValueChange={setMoverStore}>
+                      <SelectTrigger className="h-9 w-52">
+                        <SelectValue placeholder="All Stores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Stores</SelectItem>
+                        {storeList.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* KPI Summary Cards */}
+          <div className="grid gap-4 sm:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Fast Movers
+                </CardTitle>
+                <Zap className="h-4 w-4 text-emerald-500" />
+              </CardHeader>
+              <CardContent>
+                {moversQuery.isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {moverFastCount}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  High-velocity SKUs on reorder priority
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Normal Movers
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                {moversQuery.isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <div className="text-2xl font-bold text-foreground">
+                    {moverNormalCount}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Products with steady sales velocity
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Slow Movers
+                </CardTitle>
+                <PackageX className="h-4 w-4 text-amber-500" />
+              </CardHeader>
+              <CardContent>
+                {moversQuery.isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                    {moverSlowCount}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Low-velocity stock — review clearance
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Analysis Window
+                </CardTitle>
+                <Calendar className="h-4 w-4 text-violet-500" />
+              </CardHeader>
+              <CardContent>
+                {moversQuery.isLoading ? (
+                  <Skeleton className="h-8 w-20" />
+                ) : (
+                  <div className="text-2xl font-bold text-foreground">
+                    {moversQuery.data?.window_days ?? '—'}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">Days of sales considered</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Movers Detail Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Mover Classification</CardTitle>
+              <CardDescription>
+                Products ranked by units sold within the window, classified as fast, normal, or slow movers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {moversQuery.isLoading ? (
+                <div className="space-y-2 py-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : moverItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <PackageX className="h-10 w-10 text-muted-foreground/50" />
+                  <h3 className="mt-3 text-base font-semibold">No products found</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    No active products match the selected filters.
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Classification</TableHead>
+                      <TableHead className="text-right">Units Sold</TableHead>
+                      <TableHead className="text-right">Sales Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {moverItems.map((item) => (
+                      <TableRow key={item.product_id}>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {item.sku_code}
+                        </TableCell>
+                        <TableCell className="font-medium text-foreground">
+                          {item.product_name}
+                        </TableCell>
+                        <TableCell>{classificationBadge(item.classification)}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {item.total_units_sold}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                          {currency(item.sales_value)}
                         </TableCell>
                       </TableRow>
                     ))}

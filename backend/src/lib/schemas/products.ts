@@ -62,3 +62,16 @@ export const productIdParamSchema = z.object({
   id: uuidSchema,
 })
 export type ProductIdParam = z.infer<typeof productIdParamSchema>
+
+// GET /api/products/movers — fast/slow mover classification query
+// (window, store, category, classification filter, pagination).
+export const moverQuerySchema = z.object({
+  windowDays: z.coerce.number().int().min(1).max(750).optional(),
+  storeId: uuidSchema.optional(),
+  store_id: uuidSchema.optional(),
+  categoryId: uuidSchema.optional(),
+  category_id: uuidSchema.optional(),
+  classification: z.enum(['fast', 'slow', 'normal']).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+})
+export type MoverQuery = z.infer<typeof moverQuerySchema>

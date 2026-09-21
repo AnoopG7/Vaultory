@@ -1,6 +1,13 @@
+import { env, supabase } from '../../config/index.js'
 import { memoryInventory } from '../inventory/inventory.store.js'
 import { memoryProductsList } from '../purchase-orders/purchase-orders.routes.js'
+import { memorySales, memorySaleLines } from '../sales/sales.store.js'
+import { findDescendantCategoryIds } from '../categories/index.js'
 import { memoryUnits } from '../units/units.store.js'
+
+const isMockSupabase = !env.SUPABASE_URL || env.SUPABASE_URL.includes('mock') || env.SUPABASE_URL.includes('localhost')
+
+const DAY_MS = 86_400_000
 
 export interface LocalProduct {
   id: string
@@ -146,4 +153,184 @@ export function validateStockLevels(
     }
   }
   return { ok: true }
+}
+
+export interface MoverItem {
+  product_id: string
+  product_name: string
+  sku_code: string
+  total_units_sold: number
+  classification: 'fast' | 'slow' | 'normal'
+  sales_value: number
+}
+
+export interface MoverResponse {
+  window_days: number
+  items: MoverItem[]
+}
+
+const MOVER_WINDOW_DEFAULT = 90
+const FAST_MOVER_DEFAULT = 30
+const SLOW_MOVER_DEFAULT = 5
+
+/**
+ * Fast/slow mover classification (SRS §8.3.3).
+ *
+ * A product is a fast mover when units sold within the rolling window reach
+ * `fast_mover_threshold` or more, and a slow mover when they sit at or below
+ * `slow_mover_threshold` (0 units counts as slow). Prefer the stored
+ * `app_settings` values, falling back to the seeded defaults.
+ */
+async function readMoverSettings(): Promise<{ windowDays: number; fastThreshold: number; slowThreshold: number }> {
+  const defaults = { windowDays: MOVER_WINDOW_DEFAULT, fastThreshold: FAST_MOVER_DEFAULT, slowThreshold: SLOW_MOVER_DEFAULT }
+  if (isMockSupabase) return defaults
+  try {
+    const { data } = await supabase.from('app_settings').select('key, value').in('key', ['mover_window_days', 'fast_mover_threshold', 'slow_mover_threshold'])
+    if (!data) return defaults
+    const map = new Map(data.map((r) => [r.key, Number(r.value)]))
+    return {
+      windowDays: map.get('mover_window_days') ?? MOVER_WINDOW_DEFAULT,
+      fastThreshold: map.get('fast_mover_threshold') ?? FAST_MOVER_DEFAULT,
+      slowThreshold: map.get('slow_mover_threshold') ?? SLOW_MOVER_DEFAULT,
+    }
+  } catch {
+    return defaults
+  }
+}
+
+interface SoldAgg {
+  units: number
+  value: number
+}
+
+/** Add sale-line quantities to the per-product sold map (DB mode). */
+async function aggregateDbSales(
+  windowStartIso: string,
+  storeId: string | undefined,
+  sold: Map<string, SoldAgg>,
+): Promise<void> {
+  let q = supabase
+    .from('sale_lines')
+    .select('product_id, qty, line_total, sales!inner(sale_datetime, status, store_id)')
+    .gte('sales.sale_datetime', windowStartIso)
+    .eq('sales.status', 'active')
+  if (storeId) q = q.eq('sales.store_id', storeId)
+
+  const { data, error } = await q
+  if (error || !data) return
+  for (const line of data) {
+    const pid = String(line.product_id)
+    const agg = sold.get(pid) ?? { units: 0, value: 0 }
+    agg.units += Number(line.qty ?? 0)
+    agg.value += Number(line.line_total ?? 0)
+    sold.set(pid, agg)
+  }
+}
+
+/**
+ * Compute fast/slow movers within a rolling window.
+ *
+ * Filtering: `storeId` (optional), `categoryId` includes sub-categories
+ * (optional), `classification` narrows the result set (optional).
+ * `limit` caps the number of product rows returned.
+ */
+export async function getMovers(params: {
+  windowDays?: number
+  storeId?: string
+  categoryId?: string
+  classification?: 'fast' | 'slow' | 'normal'
+  limit?: number
+}): Promise<MoverResponse> {
+  const settings = await readMoverSettings()
+  const windowDays = params.windowDays ?? settings.windowDays
+  const windowStartIso = new Date(Date.now() - windowDays * DAY_MS).toISOString()
+
+  const sold = new Map<string, SoldAgg>()
+  const productRows: { id: string; name: string; sku_code: string; category_id: string; status: string }[] = []
+
+  if (!isMockSupabase) {
+    try {
+      await aggregateDbSales(windowStartIso, params.storeId, sold)
+
+      let q = supabase
+        .from('products')
+        .select('id, sku_code, name, category_id, status')
+        .eq('status', 'active')
+      if (params.categoryId) {
+        const ids = findDescendantCategoryIds(params.categoryId)
+        if (ids) q = q.in('category_id', [...ids])
+      }
+      const { data, error } = await q
+      if (!error && data) {
+        for (const p of data as { id: string; name: string; sku_code: string; category_id: string; status: string }[]) {
+          productRows.push(p)
+        }
+      }
+    } catch {
+      // fall through to in-memory store
+    }
+  }
+
+  // In-memory fallback / mock path
+  if (productRows.length === 0) {
+    const activeSaleIds = new Set(
+      memorySales
+        .filter(
+          (s) =>
+            s.status === 'active' &&
+            s.sale_datetime >= windowStartIso &&
+            (!params.storeId || s.store_id === params.storeId),
+        )
+        .map((s) => s.id),
+    )
+    for (const line of memorySaleLines) {
+      if (!activeSaleIds.has(line.sale_id)) continue
+      const agg = sold.get(line.product_id) ?? { units: 0, value: 0 }
+      agg.units += line.qty
+      agg.value += line.line_total
+      sold.set(line.product_id, agg)
+    }
+
+    let products = memoryProducts.filter((p) => p.status === 'active')
+    if (params.categoryId) {
+      const ids = findDescendantCategoryIds(params.categoryId)
+      if (ids) products = products.filter((p) => ids.has(p.category_id))
+    }
+    for (const p of products) {
+      productRows.push({ id: p.id, name: p.name, sku_code: p.sku_code, category_id: p.category_id, status: p.status })
+    }
+  }
+
+  const classify = (units: number): 'fast' | 'slow' | 'normal' => {
+    if (units >= settings.fastThreshold) return 'fast'
+    if (units <= settings.slowThreshold) return 'slow'
+    return 'normal'
+  }
+
+  let items: MoverItem[] = productRows.map((p) => {
+    const agg = sold.get(p.id) ?? { units: 0, value: 0 }
+    const units = agg.units
+    return {
+      product_id: p.id,
+      product_name: p.name,
+      sku_code: p.sku_code,
+      total_units_sold: units,
+      classification: classify(units),
+      sales_value: Number(agg.value.toFixed(2)),
+    }
+  })
+
+  if (params.classification) {
+    items = items.filter((i) => i.classification === params.classification)
+  }
+
+  // Fast movers first (highest velocity), then normal, then slow movers.
+  const order = { fast: 0, normal: 1, slow: 2 }
+  items.sort((a, b) => {
+    const cls = order[a.classification] - order[b.classification]
+    return cls !== 0 ? cls : b.total_units_sold - a.total_units_sold
+  })
+
+  const limit = params.limit ?? 100
+  return { window_days: windowDays, items: items.slice(0, limit) }
 }

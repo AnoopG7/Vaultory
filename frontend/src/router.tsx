@@ -12,6 +12,7 @@ import StoresPage from '@/pages/stores'
 import ReportsPage from '@/pages/reports'
 import SettingsPage from '@/pages/settings'
 import UsersPage from '@/pages/users'
+import AuditPage from '@/pages/audit'
 import NotFoundPage from '@/pages/not-found'
 import AccessDeniedPage from '@/pages/access-denied'
 import LoginPage from '@/pages/login'
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       { path: '/reports', element: <ReportsPage /> },
       { path: '/settings', element: <SettingsPage /> },
       { path: '/users', element: <UsersPage /> },
+      { path: '/audit', element: <AuditPage /> },
       { path: '/components', element: <ComponentsDemoPage /> },
     ],
   },
