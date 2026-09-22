@@ -329,91 +329,87 @@ function RoleKpiCards({ role }: { role: UserRole }) {
   const { data, isLoading } = useDashboardSummary()
 
   // Cards layout adapts to role capabilities and backend scoping
-  let cards = []
-
-  if (role === 'admin' || role === 'senior_stakeholder') {
-    cards = [
-      {
-        label: 'Total Stock Valuation',
-        value: data ? currency(data.total_stock_value ?? 0) : '—',
-        sub: `${data?.total_stock_units ?? 0} units across stores`,
-        icon: IndianRupee,
-      },
-      {
-        label: 'Today’s Enterprise Sales',
-        value: data ? currency(data.today_sales_total) : '—',
-        sub: `${data?.today_sales_count ?? 0} active transactions`,
-        icon: ShoppingCart,
-      },
-      {
-        label: 'Low Stock Alerts',
-        value: data ? String(data.low_stock_count) : '—',
-        sub: 'at or below reorder threshold',
-        icon: AlertTriangle,
-      },
-      {
-        label: 'Critical Stockouts',
-        value: data ? String(data.out_of_stock_count) : '—',
-        sub: 'zero inventory on hand',
-        icon: PackageX,
-      },
-    ]
-  } else if (role === 'store_staff') {
-    cards = [
-      {
-        label: 'Store Stock Units',
-        value: data ? `${data.total_stock_units} units` : '—',
-        sub: 'on hand in assigned location',
-        icon: Boxes,
-      },
-      {
-        label: 'Today’s Store Sales',
-        value: data ? currency(data.today_sales_total) : '—',
-        sub: `${data?.today_sales_count ?? 0} counter transactions`,
-        icon: ShoppingCart,
-      },
-      {
-        label: 'Local Low Stock Alerts',
-        value: data ? String(data.low_stock_count) : '—',
-        sub: 'requires PO or transfer',
-        icon: AlertTriangle,
-      },
-      {
-        label: 'Out of Stock Items',
-        value: data ? String(data.out_of_stock_count) : '—',
-        sub: 'critical store replenishment',
-        icon: PackageX,
-      },
-    ]
-  } else {
-    // Sales Personnel
-    cards = [
-      {
-        label: 'Today’s Sales Volume',
-        value: data ? currency(data.today_sales_total) : '—',
-        sub: 'revenue registered today',
-        icon: IndianRupee,
-      },
-      {
-        label: 'Customer Invoices',
-        value: data ? String(data.today_sales_count) : '—',
-        sub: 'bills processed today',
-        icon: ShoppingCart,
-      },
-      {
-        label: 'Low Stock in Store',
-        value: data ? String(data.low_stock_count) : '—',
-        sub: 'items running low at counter',
-        icon: AlertTriangle,
-      },
-      {
-        label: 'Stocked Out Items',
-        value: data ? String(data.out_of_stock_count) : '—',
-        sub: 'unavailable for customer sale',
-        icon: PackageX,
-      },
-    ]
-  }
+  const cards =
+    role === 'admin' || role === 'senior_stakeholder'
+      ? [
+          {
+            label: 'Total Stock Valuation',
+            value: data ? currency(data.total_stock_value ?? 0) : '—',
+            sub: `${data?.total_stock_units ?? 0} units across stores`,
+            icon: IndianRupee,
+          },
+          {
+            label: "Today\u2019s Enterprise Sales",
+            value: data ? currency(data.today_sales_total) : '—',
+            sub: `${data?.today_sales_count ?? 0} active transactions`,
+            icon: ShoppingCart,
+          },
+          {
+            label: 'Low Stock Alerts',
+            value: data ? String(data.low_stock_count) : '—',
+            sub: 'at or below reorder threshold',
+            icon: AlertTriangle,
+          },
+          {
+            label: 'Critical Stockouts',
+            value: data ? String(data.out_of_stock_count) : '—',
+            sub: 'zero inventory on hand',
+            icon: PackageX,
+          },
+        ]
+      : role === 'store_staff'
+        ? [
+            {
+              label: 'Store Stock Units',
+              value: data ? `${data.total_stock_units} units` : '—',
+              sub: 'on hand in assigned location',
+              icon: Boxes,
+            },
+            {
+              label: "Today\u2019s Store Sales",
+              value: data ? currency(data.today_sales_total) : '—',
+              sub: `${data?.today_sales_count ?? 0} counter transactions`,
+              icon: ShoppingCart,
+            },
+            {
+              label: 'Local Low Stock Alerts',
+              value: data ? String(data.low_stock_count) : '—',
+              sub: 'requires PO or transfer',
+              icon: AlertTriangle,
+            },
+            {
+              label: 'Out of Stock Items',
+              value: data ? String(data.out_of_stock_count) : '—',
+              sub: 'critical store replenishment',
+              icon: PackageX,
+            },
+          ]
+        : [
+            {
+              label: "Today\u2019s Sales Volume",
+              value: data ? currency(data.today_sales_total) : '—',
+              sub: 'revenue registered today',
+              icon: IndianRupee,
+            },
+            {
+              label: 'Customer Invoices',
+              value: data ? String(data.today_sales_count) : '—',
+              sub: 'bills processed today',
+              icon: ShoppingCart,
+            },
+            {
+              label: 'Low Stock in Store',
+              value: data ? String(data.low_stock_count) : '—',
+              sub: 'items running low at counter',
+              icon: AlertTriangle,
+            },
+            {
+              label: 'Stocked Out Items',
+              value: data ? String(data.out_of_stock_count) : '—',
+              sub: 'unavailable for customer sale',
+              icon: PackageX,
+            },
+          ]
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
