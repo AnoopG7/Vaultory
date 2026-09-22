@@ -79,7 +79,7 @@ const navGroups: NavGroup[] = [
       { to: '/users', label: 'Users', icon: Users, roles: ['admin'] },
       { to: '/products', label: 'Products', icon: Package, roles: ['admin'] },
       { to: '/suppliers', label: 'Suppliers', icon: Truck, roles: ['admin'] },
-      { to: '/stores', label: 'Stores', icon: StoreIcon, roles: ['admin'] },
+      { to: '/stores', label: 'Stores', icon: StoreIcon, roles: ['admin', 'senior_stakeholder'] },
       { to: '/reports', label: 'Reports', icon: BarChart3, roles: ['admin', 'senior_stakeholder'] },
       { to: '/settings', label: 'Settings', icon: Settings, roles: ['admin'] },
     ],

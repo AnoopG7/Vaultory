@@ -22,7 +22,12 @@ export const queryKeys = {
   },
   stores: {
     all: ['stores'] as const,
-    list: () => [...queryKeys.stores.all, 'list'] as const,
+    list: (params?: unknown) => [...queryKeys.stores.all, 'list', params ?? {}] as const,
+    detail: (id: string) => [...queryKeys.stores.all, 'detail', id] as const,
+  },
+  locations: {
+    all: ['locations'] as const,
+    list: (params?: unknown) => [...queryKeys.locations.all, 'list', params ?? {}] as const,
   },
   products: {
     all: ['products'] as const,
