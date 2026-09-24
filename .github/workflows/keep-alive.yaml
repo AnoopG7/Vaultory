@@ -1,0 +1,11 @@
+name: Keep Alive API
+
+on:
+  schedule:
+    - cron: "*/14 * * * *"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      -  run: curl -fsS https://vaultory.onrender.com/api/auth/signin
