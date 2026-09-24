@@ -24,4 +24,14 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      // Production preview proxy -> Render backend
+      '/api': {
+        target: 'https://vaultory.onrender.com',
+        changeOrigin: true,
+      },
+    },
+  },
 })
