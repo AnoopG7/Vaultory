@@ -1,5 +1,4 @@
-import { Outlet } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -23,6 +22,12 @@ import { useAuthStore } from "@/stores";
 import { AlertsCenterPopover } from "@/components/alerts/alerts-center-popover";
 
 export function AppLayout({ children }: { children?: ReactNode }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
   return (
     <SidebarProvider>
       <AppSidebar />

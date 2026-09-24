@@ -15,9 +15,14 @@ export default function AccessDeniedPage() {
           a mistake.
         </p>
       </div>
-      <Button asChild>
-        <Link to="/">Back to dashboard</Link>
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button asChild>
+          <Link to="/dashboard">Back to dashboard</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/">Return home</Link>
+        </Button>
+      </div>
     </div>
   )
 }

@@ -1,5 +1,6 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout'
+import { RequireRoles } from '@/components/auth'
 import ComponentsDemoPage from '@/pages/components-demo'
 import DashboardPage from '@/pages/dashboard'
 import SalesPage from '@/pages/sales'
@@ -18,25 +19,108 @@ import LoginPage from '@/pages/login'
 import ForgotPasswordPage from '@/pages/forgot-password'
 import ResetPasswordPage from '@/pages/reset-password'
 
+import HomePage from '@/pages/landing'
+
 /**
  * Routing structure (react-router v7 data router)
+ * - Default root `/` serves HomePage (landing/public overview)
+ * - `/landing` redirects to `/`
+ * - `/dashboard` and internal operational routes protected by AppLayout + RequireRoles
  */
 export const router = createBrowserRouter([
   {
+    path: '/',
+    element: <HomePage />,
+  },
+  {
+    path: '/landing',
+    element: <Navigate to="/" replace />,
+  },
+  {
     element: <AppLayout />,
     children: [
-      { path: '/', element: <DashboardPage /> },
+      { path: '/dashboard', element: <DashboardPage /> },
       { path: '/sales', element: <SalesPage /> },
-      { path: '/suppliers', element: <SuppliersPage /> },
-      { path: '/products', element: <ProductsPage /> },
-      { path: '/inventory', element: <InventoryPage /> },
-      { path: '/auto-order', element: <AutoOrderPage /> },
-      { path: '/purchase-orders', element: <PurchaseOrdersPage /> },
-      { path: '/stores', element: <StoresPage /> },
-      { path: '/reports', element: <ReportsPage /> },
-      { path: '/settings', element: <SettingsPage /> },
-      { path: '/users', element: <UsersPage /> },
-      { path: '/components', element: <ComponentsDemoPage /> },
+      {
+        path: '/inventory',
+        element: (
+          <RequireRoles roles={['admin', 'store_staff', 'senior_stakeholder']}>
+            <InventoryPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/auto-order',
+        element: (
+          <RequireRoles roles={['admin', 'store_staff']}>
+            <AutoOrderPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/purchase-orders',
+        element: (
+          <RequireRoles roles={['admin', 'store_staff']}>
+            <PurchaseOrdersPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/suppliers',
+        element: (
+          <RequireRoles roles={['admin']}>
+            <SuppliersPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/products',
+        element: (
+          <RequireRoles roles={['admin']}>
+            <ProductsPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/stores',
+        element: (
+          <RequireRoles roles={['admin']}>
+            <StoresPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/reports',
+        element: (
+          <RequireRoles roles={['admin', 'senior_stakeholder']}>
+            <ReportsPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/settings',
+        element: (
+          <RequireRoles roles={['admin']}>
+            <SettingsPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/users',
+        element: (
+          <RequireRoles roles={['admin']}>
+            <UsersPage />
+          </RequireRoles>
+        ),
+      },
+      {
+        path: '/components',
+        element: (
+          <RequireRoles roles={['admin']}>
+            <ComponentsDemoPage />
+          </RequireRoles>
+        ),
+      },
     ],
   },
   {
