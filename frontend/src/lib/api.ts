@@ -21,7 +21,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ? path
     : `/api${path.startsWith('/') ? '' : '/'}${path}`
 
-  const res = await fetch(`${API_BASE}${normalizedPath}`, { ...options, headers })
+  const res = await fetch(`${API_BASE}${normalizedPath}`, {
+    ...options,
+    headers,
+    cache: 'no-store',
+  })
 
   if (!res.ok) {
     let message = res.statusText
