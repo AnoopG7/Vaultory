@@ -927,7 +927,7 @@ export default function StoresPage() {
       {/* MODAL 1: ADD STORE (ADMIN ONLY) */}
       {/* ========================================================================= */}
       <Dialog open={isAddStoreOpen} onOpenChange={setIsAddStoreOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <form onSubmit={handleCreateStoreSubmit}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1043,7 +1043,7 @@ export default function StoresPage() {
       {/* MODAL 2: EDIT STORE (ADMIN ONLY) */}
       {/* ========================================================================= */}
       <Dialog open={Boolean(editingStore)} onOpenChange={(open) => !open && setEditingStore(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <form onSubmit={handleUpdateStoreSubmit}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1160,7 +1160,7 @@ export default function StoresPage() {
       {/* MODAL 3: STORE DETAILS DIALOG */}
       {/* ========================================================================= */}
       <Dialog open={Boolean(viewingStoreId)} onOpenChange={(open) => !open && setViewingStoreId(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1326,7 +1326,7 @@ export default function StoresPage() {
       {/* MODAL 4: EDIT LOCATION (ADMIN ONLY) */}
       {/* ========================================================================= */}
       <Dialog open={Boolean(editingLocation)} onOpenChange={(open) => !open && setEditingLocation(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <form onSubmit={handleUpdateLocationSubmit}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">

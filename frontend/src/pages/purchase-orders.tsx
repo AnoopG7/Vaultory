@@ -801,7 +801,7 @@ export default function PurchaseOrdersPage() {
       {/* 1. CREATE PURCHASE ORDER DIALOG (MANUAL) */}
       {/* ======================================================================= */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Plus className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -924,12 +924,12 @@ export default function PurchaseOrdersPage() {
                   return (
                     <div key={idx} className="flex items-center gap-2.5 rounded-md border bg-muted/40 p-2 text-xs">
                       {/* Product select */}
-                      <div className="flex-1">
+                      <div className="min-w-0 flex-1">
                         <select
                           value={line.productId}
                           onChange={(e) => handleLineProductChange(idx, e.target.value)}
                           required
-                          className="w-full h-8 rounded border border-input bg-background px-2 text-xs text-foreground"
+                          className="w-full min-w-0 h-8 truncate rounded border border-input bg-background px-2 text-xs text-foreground"
                         >
                           <option value="">Select product...</option>
                           {productsData?.products.map((p) => (
@@ -1019,7 +1019,7 @@ export default function PurchaseOrdersPage() {
       {/* 2. AUTO-TRIGGER REORDER DIALOG */}
       {/* ======================================================================= */}
       <Dialog open={autoTriggerDialogOpen} onOpenChange={setAutoTriggerDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -1122,7 +1122,7 @@ export default function PurchaseOrdersPage() {
       {/* 3. GOODS-IN RECEIPT DIALOG */}
       {/* ======================================================================= */}
       <Dialog open={receiveDialogOpen} onOpenChange={setReceiveDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <ArrowDownToLine className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -1223,7 +1223,7 @@ export default function PurchaseOrdersPage() {
       {/* 4. PO DETAILS MODAL */}
       {/* ======================================================================= */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           {selectedPo && (
             <>
               <DialogHeader className="border-b pb-3">
@@ -1284,7 +1284,7 @@ export default function PurchaseOrdersPage() {
                 {/* Lines Table */}
                 <div className="space-y-2">
                   <div className="text-xs font-semibold">Line Items</div>
-                  <div className="rounded-lg border overflow-hidden">
+                  <div className="rounded-lg border overflow-x-auto">
                     <Table>
                       <TableHeader className="bg-muted/50 text-xs">
                         <TableRow>
@@ -1408,7 +1408,7 @@ export default function PurchaseOrdersPage() {
       {/* 5. CANCEL PO DIALOG */}
       {/* ======================================================================= */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />

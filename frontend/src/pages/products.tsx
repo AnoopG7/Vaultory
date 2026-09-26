@@ -872,7 +872,7 @@ function ProductFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${initialData?.name}` : 'Add New Product'}</DialogTitle>
           <DialogDescription>
@@ -1120,7 +1120,7 @@ function CategoryFormDialog({ open, onOpenChange, initialData, defaultParentId, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${initialData?.name}` : 'Add Category'}</DialogTitle>
           <DialogDescription>
@@ -1268,7 +1268,7 @@ function UnitFormDialog({ open, onOpenChange, initialData }: UnitFormDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${initialData?.name}` : 'Add Unit'}</DialogTitle>
           <DialogDescription>Units of measure used for stock and pricing.</DialogDescription>

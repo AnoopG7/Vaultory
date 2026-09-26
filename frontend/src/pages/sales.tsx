@@ -621,7 +621,7 @@ return (
       {/* Printable Receipt Modal */}
       {completedSale && (
         <Dialog open={Boolean(completedSale)} onOpenChange={(open) => !open && setCompletedSale(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <CheckCircle2 className="size-5 text-green-500" /> Sale Receipt
@@ -825,7 +825,7 @@ function SaleHistory() {
 
         {/* Sale Detail Dialog */}
         <Dialog open={Boolean(selectedSaleId)} onOpenChange={(o) => !o && setSelectedSaleId(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>Sale {detail.data?.sale.sale_number}</DialogTitle>
               <DialogDescription>
@@ -1090,7 +1090,7 @@ function SelectSaleForReturnDialog({
   return (
     <>
       <Dialog open={open && !processOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Select Sale to Return</DialogTitle>
             <DialogDescription>
@@ -1104,7 +1104,7 @@ function SelectSaleForReturnDialog({
               <SelectTrigger id="sale-picker">
                 <SelectValue placeholder="Select sale number" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-80" position="popper">
                 {activeSales.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.sale_number} · {currency(s.total)} ({new Date(s.sale_datetime).toLocaleDateString()})
@@ -1235,7 +1235,7 @@ function ProcessReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Undo2 className="size-5 text-amber-600" /> Return Items for {detailData?.sale.sale_number}

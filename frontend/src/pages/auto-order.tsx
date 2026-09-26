@@ -849,7 +849,7 @@ export default function AutoOrderPage() {
       {/* ACCEPT CONFIRMATION */}
       {/* ===================================================================== */}
       <Dialog open={accepting !== null} onOpenChange={(open) => !open && setAccepting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -897,7 +897,7 @@ export default function AutoOrderPage() {
       {/* MODIFY + ACCEPT */}
       {/* ===================================================================== */}
       <Dialog open={modifying !== null} onOpenChange={(open) => !open && setModifying(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Pencil className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -947,7 +947,7 @@ export default function AutoOrderPage() {
       {/* REJECT */}
       {/* ===================================================================== */}
       <Dialog open={rejecting !== null} onOpenChange={(open) => !open && setRejecting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <XCircle className="h-5 w-5 text-destructive" />
@@ -998,7 +998,7 @@ export default function AutoOrderPage() {
         open={acceptResultDialog !== null}
         onOpenChange={(open) => !open && setAcceptResultDialog(null)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -1035,7 +1035,7 @@ export default function AutoOrderPage() {
       {/* FORECAST */}
       {/* ===================================================================== */}
       <Dialog open={forecastOpen} onOpenChange={setForecastOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <BrainCircuit className="h-5 w-5 text-purple-600 dark:text-purple-400" />
