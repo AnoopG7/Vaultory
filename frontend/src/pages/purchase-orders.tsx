@@ -580,7 +580,7 @@ export default function PurchaseOrdersPage() {
         <CardContent className="p-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full sm:w-auto">
             <TabsList className="w-full sm:w-auto flex flex-wrap h-auto">
-              <TabsTrigger value="all">All ({purchaseOrders.length})</TabsTrigger>
+              <TabsTrigger value="all">All ({summary?.total_pos ?? poData?.total ?? purchaseOrders.length})</TabsTrigger>
               <TabsTrigger value="draft">Draft</TabsTrigger>
               <TabsTrigger value="sent">Sent</TabsTrigger>
               <TabsTrigger value="partially_received">Partial</TabsTrigger>

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/query-keys'
 import type {
@@ -63,6 +63,7 @@ export function usePurchaseOrders(params: PurchaseOrderListParams = {}) {
   return useQuery({
     queryKey: queryKeys.purchaseOrders.list(params),
     queryFn: () => api.get<PurchaseOrderListResponse>(`/purchase-orders${query ? `?${query}` : ''}`),
+    placeholderData: keepPreviousData,
   })
 }
 
