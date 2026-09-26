@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import {
   TrendingUp,
   PackageX,
@@ -53,6 +54,39 @@ import type { UserRole } from '@/lib/types'
 
 const currency = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n)
+
+const axisTick = { fill: 'var(--muted-foreground)', fontSize: 11 }
+
+interface TooltipProps {
+  active?: boolean
+  payload?: Array<{ dataKey?: string | number; name?: string | number; value?: number | string }>
+  label?: string | number
+  formatter?: (value: number | string) => ReactNode
+  labelFormatter?: (label: string | number) => ReactNode
+}
+
+function ChartTooltip({ active, payload, label, formatter, labelFormatter }: TooltipProps) {
+  if (!active || !payload || payload.length === 0) return null
+  return (
+    <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
+      {label !== undefined && (
+        <p className="mb-1 font-medium text-popover-foreground">
+          {labelFormatter ? labelFormatter(label) : label}
+        </p>
+      )}
+      <div className="space-y-0.5">
+        {payload.map((p, i) => (
+          <p key={i} className="text-muted-foreground">
+            {p.name}:{' '}
+            <span className="font-semibold text-popover-foreground">
+              {formatter ? formatter(p.value ?? 0) : p.value}
+            </span>
+          </p>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user)
@@ -445,7 +479,7 @@ function AdminDashboardView() {
   return (
     <div className="flex flex-col gap-6">
       <RevenueTrend />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <StoreComparison />
         <TopProducts />
       </div>
@@ -457,7 +491,7 @@ function SeniorStakeholderDashboardView() {
   return (
     <div className="flex flex-col gap-6">
       <StoreComparison />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <RevenueTrend />
         <TopProducts />
       </div>
@@ -470,7 +504,7 @@ function StoreStaffDashboardView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
         <div className="lg:col-span-2">
           <RevenueTrend />
         </div>
@@ -528,7 +562,7 @@ function StoreStaffDashboardView() {
 function SalesPersonnelDashboardView() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <TopProducts />
         <RevenueTrend />
       </div>
@@ -565,11 +599,15 @@ function RevenueTrend() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={series} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 11 }} width={55} />
+                <XAxis dataKey="date" tick={axisTick} interval="preserveStartEnd" />
+                <YAxis tick={axisTick} width={55} />
                 <RechartsTooltip
-                  formatter={(v) => currency(Number(v))}
-                  labelFormatter={(l) => String(l)}
+                  content={
+                    <ChartTooltip
+                      formatter={(v) => currency(Number(v))}
+                      labelFormatter={(l) => String(l)}
+                    />
+                  }
                 />
                 <Line
                   type="monotone"
@@ -618,9 +656,11 @@ function TopProducts() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 5, right: 10, bottom: 40, left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
-                <YAxis tick={{ fontSize: 11 }} width={35} />
-                <RechartsTooltip formatter={(v) => `${v} units`} />
+                <XAxis dataKey="name" tick={axisTick} angle={-35} textAnchor="end" />
+                <YAxis tick={axisTick} width={35} />
+                <RechartsTooltip
+                  content={<ChartTooltip formatter={(v) => `${v} units`} labelFormatter={(l) => String(l)} />}
+                />
                 <Bar dataKey="units" fill="var(--primary)" name="Units sold" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -659,10 +699,15 @@ function StoreComparison() {
                 margin={{ top: 5, right: 10, bottom: 40, left: -10 }}
               >
                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
-                <YAxis tick={{ fontSize: 11 }} width={55} />
-                <RechartsTooltip formatter={(v) => currency(Number(v))} />
-                <Legend />
+                <XAxis dataKey="name" tick={axisTick} angle={-15} textAnchor="end" />
+                <YAxis tick={axisTick} width={55} />
+                <RechartsTooltip
+                  content={<ChartTooltip formatter={(v) => currency(Number(v))} labelFormatter={(l) => String(l)} />}
+                />
+                <Legend
+                  wrapperStyle={{ color: 'var(--muted-foreground)', fontSize: 12 }}
+                  formatter={(value) => <span style={{ color: 'var(--muted-foreground)' }}>{value}</span>}
+                />
                 <Bar dataKey="sales" fill="var(--primary)" name="Sales value" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
