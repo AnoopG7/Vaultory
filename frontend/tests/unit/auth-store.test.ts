@@ -33,10 +33,12 @@ describe('auth store', () => {
 
     expect(useAuthStore.getState()).toMatchObject({ user, token: 'signed-in-token', isAuthenticated: true, isLoading: false })
     expect(localStorage.getItem('vaultory_token')).toBe('signed-in-token')
+    expect(localStorage.getItem('vaultory_user')).toBe(JSON.stringify(user))
   })
 
   it('clears local auth state even when sign-out request fails', async () => {
     localStorage.setItem('vaultory_token', 'old-token')
+    localStorage.setItem('vaultory_user', JSON.stringify(user))
     useAuthStore.setState({ user, token: 'old-token', isAuthenticated: true })
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
 
@@ -44,5 +46,6 @@ describe('auth store', () => {
 
     expect(useAuthStore.getState()).toMatchObject({ user: null, token: null, isAuthenticated: false, isLoading: false, error: null })
     expect(localStorage.getItem('vaultory_token')).toBeNull()
+    expect(localStorage.getItem('vaultory_user')).toBeNull()
   })
 })

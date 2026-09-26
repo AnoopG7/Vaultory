@@ -8,4 +8,4 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      -  run: curl -fsS https://vaultory.onrender.com/api/auth/signin
+      -  run: curl -fsS https://vaultory.onrender.com/api/health

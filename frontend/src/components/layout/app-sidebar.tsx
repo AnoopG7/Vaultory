@@ -35,6 +35,7 @@ type NavItem = {
   icon: typeof BarChart3
   end?: boolean
   roles?: UserRole[]
+  hidden?: boolean
 }
 
 type NavGroup = {
@@ -86,11 +87,12 @@ const navGroups: NavGroup[] = [
   },
   {
     group: 'Dev',
-    items: [{ to: '/components', label: 'Components', icon: ComponentIcon, roles: ['admin'] }],
+    items: [{ to: '/components', label: 'Components', icon: ComponentIcon, roles: ['admin'], hidden: true }],
   },
 ]
 
 function canSee(item: NavItem, role: UserRole | undefined): boolean {
+  if (item.hidden) return false
   if (!item.roles) return true
   if (!role) return false
   return item.roles.includes(role)
