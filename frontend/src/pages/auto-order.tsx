@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Sparkles,
   RefreshCw,
@@ -28,6 +28,7 @@ import {
 import { useLocations } from '@/hooks/use-reference'
 import { useProducts } from '@/hooks/use-products'
 import type { AiRecommendation } from '@/lib/types'
+import { useAuthStore } from '@/stores'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -94,6 +95,9 @@ function renderStatusBadge(status: string) {
 }
 
 export default function AutoOrderPage() {
+  const role = useAuthStore((s) => s.user?.role)
+  // Scan / forecast / warehouse-level tools are admin & senior-stakeholder features.
+  const isExec = role === 'admin' || role === 'senior_stakeholder'
   const [tab, setTab] = useState('recommendations')
 
   // ---- Recommendations list filters ----
@@ -228,6 +232,17 @@ export default function AutoOrderPage() {
     }
   }
 
+  // Auto-run the replenishment dry-run scan as soon as an exec opens the tab,
+  // so it is never shown blank waiting for a button click.
+  const prevTabRef = useRef(tab)
+  useEffect(() => {
+    if (isExec && tab === 'scan' && prevTabRef.current !== 'scan' && !autoOrderMutation.isPending) {
+      void runScan()
+    }
+    prevTabRef.current = tab
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, isExec])
+
   const confirmGenerate = async () => {
     try {
       const res = await autoOrderMutation.mutateAsync({
@@ -278,23 +293,25 @@ export default function AutoOrderPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            className="border-purple-500/40 text-purple-700 dark:text-purple-400 hover:bg-purple-500/10 gap-2"
-            onClick={() => setForecastOpen(true)}
-          >
-            <BrainCircuit className="h-4 w-4" />
-            Run Forecast
-          </Button>
-          <Button
-            className="bg-purple-600 hover:bg-purple-700 text-white gap-2 font-medium shadow-xs"
-            onClick={() => setTab('scan')}
-          >
-            <Wand2 className="h-4 w-4" />
-            Scan Reorder Levels
-          </Button>
-        </div>
+        {isExec && (
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              className="border-purple-500/40 text-purple-700 dark:text-purple-400 hover:bg-purple-500/10 gap-2"
+              onClick={() => setForecastOpen(true)}
+            >
+              <BrainCircuit className="h-4 w-4" />
+              Run Forecast
+            </Button>
+            <Button
+              className="bg-purple-600 hover:bg-purple-700 text-white gap-2 font-medium shadow-xs"
+              onClick={() => setTab('scan')}
+            >
+              <Wand2 className="h-4 w-4" />
+              Scan Reorder Levels
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Info banner */}
@@ -371,8 +388,12 @@ export default function AutoOrderPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
-          <TabsTrigger value="scan">Replenishment Scan</TabsTrigger>
-          <TabsTrigger value="warehouse">Warehouse Levels</TabsTrigger>
+          {isExec && (
+            <>
+              <TabsTrigger value="scan">Replenishment Scan</TabsTrigger>
+              <TabsTrigger value="warehouse">Warehouse Levels</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         {/* =================================================================== */}
@@ -567,7 +588,7 @@ export default function AutoOrderPage() {
           {/* ================================================================= */}
           {/* 2. REPLENISHMENT SCAN */}
           {/* ================================================================= */}
-          {tab === 'scan' && (
+          {isExec && tab === 'scan' && (
             <Card className="shadow-xs overflow-hidden">
               <div className="p-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
@@ -760,7 +781,7 @@ export default function AutoOrderPage() {
           {/* ================================================================= */}
           {/* 3. WAREHOUSE LEVELS */}
           {/* ================================================================= */}
-          {tab === 'warehouse' && (
+          {isExec && tab === 'warehouse' && (
             <Card className="shadow-xs overflow-hidden">
               <div className="p-4 border-b flex items-center justify-between">
                 <div>
