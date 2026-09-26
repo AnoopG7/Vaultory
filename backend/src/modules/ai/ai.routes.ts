@@ -26,6 +26,32 @@ function actorFromReq(req: Request) {
   return { id: req.userId, email: req.email, role: req.role }
 }
 
+// Returns the location IDs belonging to a store. Used to restrict AI data flow
+// for store-scoped roles to their own store's locations.
+async function getStoreLocationIds(storeId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from('locations')
+    .select('id')
+    .eq('store_id', storeId)
+  if (!data) {
+    const fallback = STORE_LOCATION_MAP[storeId]
+    return fallback ? [fallback] : []
+  }
+  return data.map((l) => l.id as string)
+}
+
+// All locations across the seeded stores (mirrors STORE_LOCATIONS in sales).
+const STORE_LOCATION_MAP: Record<string, string> = {
+  'e1000000-0000-0000-0000-000000000001': 'a1000000-0000-0000-0000-000000000001',
+  'e1000000-0000-0000-0000-000000000002': 'a1000000-0000-0000-0000-000000000002',
+  'e1000000-0000-0000-0000-000000000003': 'a1000000-0000-0000-0000-000000000003',
+}
+
+async function allowedLocationIds(req: Request): Promise<string[] | null> {
+  if (req.role !== 'store_staff' && req.role !== 'sales_personnel') return null
+  return req.storeId ? await getStoreLocationIds(req.storeId) : []
+}
+
 // -----------------------------------------------------------------------------
 // 1. GET /api/ai/recommendations — list, filterable by type/status/product/location
 // -----------------------------------------------------------------------------
@@ -42,6 +68,7 @@ router.get(
       locationId: q.locationId,
       limit: q.limit,
       offset: q.offset,
+      allowedLocationIds: (await allowedLocationIds(req)) ?? undefined,
     })
     res.json(result)
   }),
@@ -58,6 +85,11 @@ router.get(
     const { id } = validated(req, 'params', aiRecommendationIdParamSchema)
     const recommendation = await getRecommendation(id)
     if (!recommendation) {
+      throw new AppError(404, 'Recommendation not found', 'NOT_FOUND')
+    }
+    // Store-scoped roles may only view recommendations from their own store.
+    const allowed = await allowedLocationIds(req)
+    if (allowed && !allowed.includes(recommendation.location_id ?? '')) {
       throw new AppError(404, 'Recommendation not found', 'NOT_FOUND')
     }
     res.json({ recommendation })

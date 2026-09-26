@@ -20,6 +20,7 @@ import { AppSidebar } from "@/components/layout";
 import { ModeToggle } from "@/components/theme";
 import { useAuthStore } from "@/stores";
 import { AlertsCenterPopover } from "@/components/alerts/alerts-center-popover";
+import { MissingStoreBanner } from "@/components/layout/missing-store-banner";
 
 export function AppLayout({ children }: { children?: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -41,6 +42,7 @@ export function AppLayout({ children }: { children?: ReactNode }) {
           <UserMenu />
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">
+          <MissingStoreBanner />
           {children ?? <Outlet />}
         </main>
       </SidebarInset>

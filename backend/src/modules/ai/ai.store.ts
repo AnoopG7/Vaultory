@@ -123,6 +123,8 @@ export interface ListRecommendationsQuery {
   locationId?: string
   limit?: number
   offset?: number
+  /** When provided (store-scoped roles), restricts results to these locations. */
+  allowedLocationIds?: string[]
 }
 
 interface RecommendationSummary {
@@ -153,6 +155,18 @@ export async function listRecommendations(
   const limit = query.limit ?? 50
   const offset = query.offset ?? 0
 
+  // Store-scoped role with no assigned store sees nothing (data flow restriction).
+  const scopedLocationIds = query.allowedLocationIds ?? null
+  if (scopedLocationIds && scopedLocationIds.length === 0) {
+    return {
+      recommendations: [],
+      total: 0,
+      limit,
+      offset,
+      summary: { total: 0, pending: 0, accepted: 0, modified: 0, rejected: 0 },
+    }
+  }
+
   if (!isMockSupabase) {
     try {
       const dataQuery = supabase
@@ -160,6 +174,8 @@ export async function listRecommendations(
         .select('*, products(name, sku_code), locations(name)', { count: 'exact' })
       const statusQuery = supabase.from('ai_recommendations').select('status')
 
+      if (scopedLocationIds) dataQuery.in('location_id', scopedLocationIds)
+      if (scopedLocationIds) statusQuery.in('location_id', scopedLocationIds)
       if (query.status) dataQuery.eq('status', query.status)
       if (query.type) {
         dataQuery.eq('type', query.type)
@@ -200,6 +216,7 @@ export async function listRecommendations(
   if (query.status) filtered = filtered.filter((r) => r.status === query.status)
   if (query.productId) filtered = filtered.filter((r) => r.product_id === query.productId)
   if (query.locationId) filtered = filtered.filter((r) => r.location_id === query.locationId)
+  if (scopedLocationIds) filtered = filtered.filter((r) => scopedLocationIds.includes(r.location_id ?? ''))
 
   return {
     recommendations: filtered.slice(offset, offset + limit),
