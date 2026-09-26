@@ -27,14 +27,33 @@ const router = Router()
 
 /**
  * Roles allowed to record or return a sale (BRD §12).
- * Sales personnel (and Admin) record sales & process returns; store staff only view/manage stock.
+ * Admin, sales personnel and store staff record sales at the POS; store staff
+ * are restricted to their own assigned store (enforced in the create handler).
  */
-const SALE_WRITE_ROLES = ['admin', 'sales_personnel']
+const SALE_WRITE_ROLES = ['admin', 'store_staff', 'sales_personnel']
 
 /** Assert the caller may record sales or returns (server-side RBAC per BRD §12). */
 function assertCanWriteSale(role: string | undefined): void {
   if (!role || !SALE_WRITE_ROLES.includes(role)) {
     throw new AppError(403, 'You do not have permission to record sales or returns', 'FORBIDDEN')
+  }
+}
+
+/**
+ * Store staff may only ring up sales at their own assigned store. Mirrors the
+ * scoping used by the list/detail handlers so a sale can never be recorded
+ * against another store (or with no store assignment at all).
+ */
+function assertStoreScope(actor: {
+  role: string | undefined
+  storeId: string | null | undefined
+}, storeId: string | undefined): void {
+  if (actor.role !== 'store_staff' && actor.role !== 'sales_personnel') return
+  if (!actor.storeId) {
+    throw new AppError(403, 'You are not assigned to a store. Contact an administrator.', 'FORBIDDEN')
+  }
+  if (storeId && actor.storeId !== storeId) {
+    throw new AppError(403, 'You can only record sales at your own store', 'FORBIDDEN')
   }
 }
 
@@ -49,6 +68,8 @@ router.post(
     assertCanWriteSale(req.role)
 
     const payload = validated(req, 'body', createSaleSchema)
+
+    assertStoreScope({ role: req.role, storeId: req.storeId }, payload.storeId)
 
     const sale = await createSaleTransaction(
       payload,

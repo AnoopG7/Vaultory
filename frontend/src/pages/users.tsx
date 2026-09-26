@@ -204,6 +204,12 @@ export default function UsersPage() {
       return
     }
 
+    const scoped = createForm.role === 'store_staff' || createForm.role === 'sales_personnel'
+    if (scoped && (!createForm.storeId || createForm.storeId === 'none')) {
+      toast.error('Please assign a store for this role.')
+      return
+    }
+
     try {
       await createMutation.mutateAsync({
         email: createForm.email,
@@ -229,6 +235,12 @@ export default function UsersPage() {
 
     if (!editForm.fullName.trim()) {
       toast.error('Full name is required.')
+      return
+    }
+
+    const scoped = editForm.role === 'store_staff' || editForm.role === 'sales_personnel'
+    if (scoped && (!editForm.storeId || editForm.storeId === 'none')) {
+      toast.error('Please assign a store for this role.')
       return
     }
 

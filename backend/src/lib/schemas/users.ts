@@ -20,6 +20,20 @@ export const listUsersQuerySchema = z.object({
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>
 
 // POST /users — admin creates a user via Supabase Auth + profile row.
+// Store-scoped roles (store_staff / sales_personnel) must be assigned a store,
+// otherwise their dashboard/sales/PO views are dead-empty (scoped to nothing).
+const SCOPED_ROLES = ['store_staff', 'sales_personnel'] as const
+
+const requireStoreForScopedRole = (value: CreateUserInput | UpdateUserInput, ctx: z.RefinementCtx) => {
+  if (SCOPED_ROLES.includes(value.role as (typeof SCOPED_ROLES)[number]) && !value.storeId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['storeId'],
+      message: 'A store is required for this role',
+    })
+  }
+}
+
 export const createUserSchema = z.object({
   email: emailSchema,
   password: z.string().min(8, 'Password must be at least 8 characters').max(72),
@@ -29,7 +43,7 @@ export const createUserSchema = z.object({
   gender: genderSchema.nullable().optional(),
   address: z.string().trim().max(2000).nullable().optional(),
   phone: z.string().trim().max(20).nullable().optional(),
-})
+}).superRefine(requireStoreForScopedRole)
 export type CreateUserInput = z.infer<typeof createUserSchema>
 
 // PATCH /users/:id — edit name / role / store / details.
@@ -40,6 +54,16 @@ export const updateUserSchema = z.object({
   phone: z.string().trim().max(20).nullable().optional(),
   address: z.string().trim().max(2000).nullable().optional(),
   gender: genderSchema.nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (value.role === undefined && value.storeId === undefined) return
+  const role = value.role
+  if (role !== undefined && SCOPED_ROLES.includes(role as (typeof SCOPED_ROLES)[number]) && value.storeId === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['storeId'],
+      message: 'A store is required for this role',
+    })
+  }
 })
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 

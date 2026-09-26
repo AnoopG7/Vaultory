@@ -76,7 +76,7 @@ export default function SalesPage() {
   const [activeTab, setActiveTab] = useState('pos')
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.role === 'admin'
-  const canWrite = user?.role === 'admin' || user?.role === 'sales_personnel'
+  const canWrite = user?.role === 'admin' || user?.role === 'store_staff' || user?.role === 'sales_personnel'
 
   return (
     <div className="flex flex-col gap-6">
@@ -189,7 +189,7 @@ function PointOfSaleTerminal({ onSaleComplete }: { onSaleComplete?: (sale: Sale)
   const [completedSale, setCompletedSale] = useState<Sale | null>(null)
   const [completedLines, setCompletedLines] = useState<CartLine[]>([])
 
-  const canWrite = user?.role === 'admin' || user?.role === 'sales_personnel'
+  const canWrite = user?.role === 'admin' || user?.role === 'store_staff' || user?.role === 'sales_personnel'
 
 // Products available
   const availableProducts = useMemo(() => {
@@ -695,7 +695,7 @@ return (
 function SaleHistory() {
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.role === 'admin'
-  const canWrite = user?.role === 'admin' || user?.role === 'sales_personnel'
+  const canWrite = user?.role === 'admin' || user?.role === 'store_staff' || user?.role === 'sales_personnel'
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'voided'>('all')
   const [searchTerm, setSearchTerm] = useState('')
