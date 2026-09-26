@@ -18,6 +18,7 @@ export function useLocations() {
         locations: Array<{
           id: string
           type: 'store' | 'warehouse'
+          store_id: string | null
           name: string
           code: string
           city: string

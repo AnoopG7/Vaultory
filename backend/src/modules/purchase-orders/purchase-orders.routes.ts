@@ -814,6 +814,19 @@ router.post(
     const notes = body.notes ?? null
     const source = body.source || 'manual'
 
+    // Store-scoped roles (store_staff / sales_personnel) may only create POs
+    // destined to their own store's locations; otherwise the PO silently
+    // disappears from their (store-scoped) list. Mirrors list/detail scoping.
+    if (req.role === 'store_staff' || req.role === 'sales_personnel') {
+      const allowedDestinations = req.storeId ? await getStoreLocationIds(req.storeId) : []
+      if (allowedDestinations.length === 0) {
+        throw new AppError(403, 'You are not assigned to a store. Contact an administrator.', 'FORBIDDEN')
+      }
+      if (!allowedDestinations.includes(destinationId)) {
+        throw new AppError(403, 'You can only create purchase orders for your assigned store', 'FORBIDDEN')
+      }
+    }
+
     // Extract product IDs
     const normalizedLines = body.lines.map((l) => {
       const productId = (l.productId || l.product_id)!

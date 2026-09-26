@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
   const { data: locData } = useLocations()
   const assignedLocation = locData?.locations?.find(
-    (l) => l.id === user?.storeId || l.id === user?.store_id,
+    (l) => l.store_id === user?.storeId || l.store_id === user?.store_id,
   )
 
   const isExec = role === 'admin' || role === 'senior_stakeholder'

@@ -69,8 +69,13 @@ import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useAuthStore } from '@/stores'
 
 export default function PurchaseOrdersPage() {
+  const user = useAuthStore((s) => s.user)
+  const isStoreScoped = user?.role === 'store_staff' || user?.role === 'sales_personnel'
+  const scopedStoreId = user?.store_id ?? user?.storeId
+
   // Query Filters
   const [selectedTab, setSelectedTab] = useState<string>('all')
   const [selectedLocation, setSelectedLocation] = useState<string>('all')
@@ -113,6 +118,11 @@ export default function PurchaseOrdersPage() {
   // Reference data
   const { data: suppliersData } = useSuppliers({ status: 'active', limit: 100 })
   const { data: locationsData } = useLocations()
+  const visibleLocations = useMemo(() => {
+    const all = locationsData?.locations ?? []
+    if (isStoreScoped && scopedStoreId) return all.filter((loc) => loc.store_id === scopedStoreId)
+    return all
+  }, [isStoreScoped, scopedStoreId, locationsData])
   const { data: productsData } = useProducts()
 
   // Mutations
@@ -588,7 +598,7 @@ export default function PurchaseOrdersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Locations</SelectItem>
-                {locationsData?.locations.map((loc) => (
+                {visibleLocations.map((loc) => (
                   <SelectItem key={loc.id} value={loc.id}>
                     {loc.name} ({loc.type})
                   </SelectItem>
@@ -847,7 +857,7 @@ export default function PurchaseOrdersPage() {
                   className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="">Select destination location...</option>
-                  {locationsData?.locations.map((loc) => (
+                  {visibleLocations.map((loc) => (
                     <option key={loc.id} value={loc.id}>
                       {loc.name} ({loc.type})
                     </option>
@@ -1046,7 +1056,7 @@ export default function PurchaseOrdersPage() {
                 className="h-8 rounded border border-input bg-background px-3 text-xs text-foreground"
               >
                 <option value="all">All Locations (Stores & Warehouse)</option>
-                {locationsData?.locations.map((loc) => (
+                {visibleLocations.map((loc) => (
                   <option key={loc.id} value={loc.id}>
                     {loc.name}
                   </option>
