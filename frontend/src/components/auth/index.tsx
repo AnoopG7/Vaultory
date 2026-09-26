@@ -31,8 +31,26 @@ export function RequireRoles({
   children: ReactNode
 }) {
   const user = useAuthStore((s) => s.user)
+  const token = useAuthStore((s) => s.token)
+  const location = useLocation()
 
-  if (!user || !roles.includes(user.role)) {
+  // Token exists but profile is still hydrating; do not redirect to /403 prematurely
+  if (token && !user) {
+    return (
+      <div className="flex h-[50vh] w-full items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  // Not authenticated -> redirect to login preserving destination
+  if (!user) {
+    const from = location.pathname + location.search
+    return <Navigate to="/login" replace state={{ from }} />
+  }
+
+  // Authenticated but does not have the required role
+  if (!roles.includes(user.role)) {
     return <Navigate to="/403" replace />
   }
 

@@ -19,13 +19,23 @@ interface AuthState {
 }
 
 const TOKEN_KEY = 'vaultory_token'
+const USER_KEY = 'vaultory_user'
 
 function readStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
 
+function readStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    return raw ? (JSON.parse(raw) as User) : null
+  } catch {
+    return null
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
+  user: readStoredUser(),
   token: readStoredToken(),
   isAuthenticated: Boolean(readStoredToken()),
   isLoading: false,
@@ -39,6 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         input,
       )
       localStorage.setItem(TOKEN_KEY, res.token)
+      localStorage.setItem(USER_KEY, JSON.stringify(res.user))
       set({ user: res.user, token: res.token, isAuthenticated: true, isLoading: false })
     } catch (e) {
       set({ isLoading: false, error: e instanceof ApiError ? e.message : 'Sign in failed' })
@@ -63,10 +74,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const res = await api.get<{ user: User }>('/auth/me')
+      localStorage.setItem(USER_KEY, JSON.stringify(res.user))
       set({ user: res.user, isAuthenticated: true, isLoading: false })
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         localStorage.removeItem(TOKEN_KEY)
+        localStorage.removeItem(USER_KEY)
         set({ user: null, token: null, isAuthenticated: false, isLoading: false, error: null })
       } else {
         set({ isLoading: false, error: e instanceof ApiError ? e.message : 'Failed to load session' })
@@ -104,6 +117,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Ignore network errors on signout; always clear locally.
     } finally {
       localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USER_KEY)
       set({ user: null, token: null, isAuthenticated: false, isLoading: false, error: null })
     }
   },
