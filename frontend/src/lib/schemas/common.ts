@@ -17,7 +17,12 @@ export const shortCodeSchema = z
   .max(30)
   .transform((v) => v.toUpperCase())
 
-export const emailSchema = z.string().email()
+export const emailSchema = z
+  .string()
+  .regex(
+    /^[A-Za-z][A-Za-z0-9]*(?:[._%+-][A-Za-z0-9]+)*@[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*\.[A-Za-z]{2,}$/,
+    'Enter a valid email address (must start with a letter)',
+  )
 
 export const moneySchema = z.coerce.number().max(999999999999.99)
 export const nonNegativeMoneySchema = z.coerce.number().min(0).max(999999999999.99)

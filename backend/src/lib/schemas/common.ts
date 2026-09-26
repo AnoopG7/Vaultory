@@ -41,7 +41,16 @@ export const shortCodeSchema = z
   .transform((v) => v.toUpperCase())
 
 // Email (citext columns: profiles.email, suppliers.email, stores.email).
-export const emailSchema = z.string().trim().email().max(255)
+// Local part must start with a letter; domain requires at least one dot and a
+// letter-only TLD (e.g. admin@vaultory.app). "1abc" / "1abc@gmail.com" fail.
+const EMAIL_REGEX =
+  /^[A-Za-z][A-Za-z0-9]*(?:[._%+-][A-Za-z0-9]+)*@[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*\.[A-Za-z]{2,}$/
+
+export const emailSchema = z
+  .string()
+  .trim()
+  .regex(EMAIL_REGEX, 'Enter a valid email address (must start with a letter)')
+  .max(255)
 
 // Normalized free text (trims surrounding whitespace).
 export const textSchema = z.string().trim()
