@@ -1,8 +1,9 @@
 name: Keep Alive API
 
 on:
-  schedule:
-    - cron: "*/14 * * * *"
+   workflow_dispatch:
+#   schedule:
+#     - cron: "*/14 * * * *"
 
 jobs:
   ping:
